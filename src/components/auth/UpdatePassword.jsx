@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import authService from '../../services/authService';
 import {
   Container,
   Paper,
@@ -10,18 +11,12 @@ import {
   IconButton,
   InputAdornment,
   Stack,
-  LinearProgress,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText
+  LinearProgress
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff,
   ArrowBack,
-  CheckCircle,
-  Cancel,
   CheckCircleOutline
 } from '@mui/icons-material';
 
@@ -38,34 +33,28 @@ const UpdatePassword = () => {
 
   const resetData = location.state || {};
 
-  const passwordRequirements = [
-    { regex: /.{8,}/, text: 'At least 8 characters', key: 'length' },
-    { regex: /[A-Z]/, text: 'One uppercase letter', key: 'uppercase' },
-    { regex: /[a-z]/, text: 'One lowercase letter', key: 'lowercase' },
-    { regex: /\d/, text: 'One number', key: 'number' },
-    { regex: /[!@#$%^&*]/, text: 'One special character (!@#$%^&*)', key: 'special' },
-  ];
-
-  const validatePassword = (pwd) => {
-    return passwordRequirements.every(req => req.regex.test(pwd));
-  };
-
   const getPasswordStrength = () => {
-    const metRequirements = passwordRequirements.filter(req => req.regex.test(password)).length;
-    const percentage = (metRequirements / passwordRequirements.length) * 100;
-    
+    const len = password.length;
+    let percentage = 0;
     let color = '#e0e0e0';
     let label = '';
     
-    if (metRequirements === 0) {
+    if (len === 0) {
       return { percentage: 0, color, label };
-    } else if (metRequirements <= 2) {
+    } else if (len < 6) {
+      percentage = (len / 6) * 50;
       color = '#f44336';
-      label = 'Weak';
-    } else if (metRequirements <= 4) {
+      label = 'Too Short';
+    } else if (len >= 6 && len < 10) {
+      percentage = 60;
       color = '#ff9800';
-      label = 'Medium';
+      label = 'Fair';
+    } else if (len >= 10 && len < 14) {
+      percentage = 80;
+      color = '#4caf50';
+      label = 'Good';
     } else {
+      percentage = 100;
       color = '#42956c';
       label = 'Strong';
     }
@@ -78,8 +67,8 @@ const UpdatePassword = () => {
     
     if (!password) {
       newErrors.password = 'Password is required';
-    } else if (!validatePassword(password)) {
-      newErrors.password = 'Password does not meet all requirements';
+    } else if (password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
     }
     
     if (!confirmPassword) {
@@ -96,16 +85,35 @@ const UpdatePassword = () => {
     e.preventDefault();
     if (validateForm()) {
       setIsLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        console.log('Password updated successfully');
-        setIsUpdated(true);
+      try {
+        // Get userId from location state (passed from OTP verification)
+        const userId = resetData.userId || location.state?.userId;
+        
+        if (!userId) {
+          setErrors({ password: 'Invalid session. Please restart the password reset process.' });
+          setIsLoading(false);
+          return;
+        }
+        
+        // Call the password reset update API
+        const result = await authService.updateResetPassword(password, userId);
+        
+        if (result.success) {
+          console.log('Password updated successfully');
+          setIsUpdated(true);
+          // Redirect to login after 2 seconds
+          setTimeout(() => {
+            navigate('/login');
+          }, 2000);
+        } else {
+          setErrors({ password: result.message || 'Failed to update password' });
+        }
+      } catch (error) {
+        console.error('Password update error:', error);
+        setErrors({ password: 'Failed to update password. Please try again.' });
+      } finally {
         setIsLoading(false);
-        // Redirect to login after 2 seconds
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
-      }, 1500);
+      }
     }
   };
 
@@ -114,10 +122,11 @@ const UpdatePassword = () => {
       <Container component="main" maxWidth="xs">
         <Box
           sx={{
-            marginTop: 8,
+            minHeight: '100vh',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           <Paper
@@ -165,10 +174,11 @@ const UpdatePassword = () => {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
+          minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         <Paper
@@ -183,21 +193,20 @@ const UpdatePassword = () => {
             position: 'relative',
           }}
         >
-          <IconButton
-            onClick={() => navigate('/otp-verification')}
-            sx={{
-              position: 'absolute',
-              top: 16,
-              left: 16,
-              color: 'text.secondary',
-            }}
-          >
-            <ArrowBack />
-          </IconButton>
-
-          <Typography component="h1" variant="h4" fontWeight="bold" color="primary.main">
-            Create New Password
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', mb: 2 }}>
+            <IconButton
+              onClick={() => navigate('/otp-verification')}
+              sx={{
+                mr: 1,
+                color: 'text.secondary',
+              }}
+            >
+              <ArrowBack />
+            </IconButton>
+            <Typography component="h1" variant="h6" fontWeight="bold" color="primary.main" sx={{ flex: 1, textAlign: 'center', mr: 5 }}>
+              Create New Password
+            </Typography>
+          </Box>
           <Typography variant="body1" color="text.secondary" sx={{ mt: 1, mb: 3, textAlign: 'center' }}>
             Choose a strong password to protect your account
           </Typography>
@@ -258,31 +267,9 @@ const UpdatePassword = () => {
                     )}
                   </Box>
 
-                  <Paper sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
-                    <Typography variant="caption" fontWeight="bold" gutterBottom>
-                      Password requirements:
-                    </Typography>
-                    <List dense sx={{ py: 0 }}>
-                      {passwordRequirements.map((req) => (
-                        <ListItem key={req.key} sx={{ px: 0, py: 0.5 }}>
-                          <ListItemIcon sx={{ minWidth: 28 }}>
-                            {req.regex.test(password) ? (
-                              <CheckCircle sx={{ fontSize: 18, color: '#42956c' }} />
-                            ) : (
-                              <Cancel sx={{ fontSize: 18, color: '#bdbdbd' }} />
-                            )}
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={req.text}
-                            primaryTypographyProps={{
-                              variant: 'caption',
-                              color: req.regex.test(password) ? 'text.primary' : 'text.secondary',
-                            }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Paper>
+                  <Typography variant="caption" color="text.secondary">
+                    Password must be at least 6 characters long
+                  </Typography>
                 </Box>
               )}
 

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import userService from '../../services/userService';
 import {
   Box,
   Paper,
@@ -40,18 +41,52 @@ import {
   Download,
   Upload
 } from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 
 const Employees = () => {
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [filterAnchor, setFilterAnchor] = useState(null);
+  const [employees, setEmployees] = useState([]);
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({});
+  const [addingUser, setAddingUser] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    basicSalary: ''
+  });
+  const [formErrors, setFormErrors] = useState({});
 
-  // Sample employee data
-  const employees = [
+  useEffect(() => {
+    fetchEmployees();
+  }, [page, rowsPerPage]);
+
+  const fetchEmployees = async () => {
+    setLoading(true);
+    try {
+      const result = await userService.getUsersList(page, rowsPerPage);
+      if (result.success) {
+        setEmployees(result.users);
+        setTotalEmployees(result.pagination.totalUsers || 0);
+        setStats(result.stats || {});
+      }
+    } catch (error) {
+      console.error('Failed to fetch employees:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sample employee data (removed - now fetching from API)
+  const oldEmployees = [
     {
       id: 1,
       name: 'John Doe',
@@ -151,12 +186,12 @@ const Employees = () => {
   ];
 
   const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+    setPage(newPage + 1); // API uses 1-based pagination
   };
 
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+    setPage(1); // Reset to first page
   };
 
   const handleMenuOpen = (event, employee) => {
@@ -177,12 +212,65 @@ const Employees = () => {
     setFilterAnchor(null);
   };
 
-  const handleAddEmployee = () => {
+  const handleOpenAddDialog = () => {
     setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
+    setNewEmployee({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      basicSalary: ''
+    });
+    setFormErrors({});
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!newEmployee.firstName) errors.firstName = 'First name is required';
+    if (!newEmployee.lastName) errors.lastName = 'Last name is required';
+    if (!newEmployee.email) errors.email = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(newEmployee.email)) errors.email = 'Invalid email';
+    if (!newEmployee.phone) errors.phone = 'Phone is required';
+    if (!newEmployee.basicSalary) errors.basicSalary = 'Basic salary is required';
+    else if (newEmployee.basicSalary < 0) errors.basicSalary = 'Salary must be positive';
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleAddEmployee = async () => {
+    if (!validateForm()) return;
+    
+    setAddingUser(true);
+    try {
+      // Format phone number if it starts with 07
+      let formattedPhone = newEmployee.phone;
+      if (formattedPhone.startsWith('07')) {
+        formattedPhone = '+254' + formattedPhone.substring(1);
+      }
+      
+      const result = await userService.addUser({
+        ...newEmployee,
+        phone: formattedPhone,
+        basicSalary: parseFloat(newEmployee.basicSalary)
+      });
+      
+      if (result.success) {
+        handleCloseDialog();
+        fetchEmployees(); // Refresh the list
+      } else {
+        setFormErrors({ submit: result.message });
+      }
+    } catch (error) {
+      console.error('Failed to add employee:', error);
+      setFormErrors({ submit: 'Failed to add employee' });
+    } finally {
+      setAddingUser(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -198,12 +286,14 @@ const Employees = () => {
     }
   };
 
-  const filteredEmployees = employees.filter(employee =>
-    employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    employee.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    employee.position.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredEmployees = employees.filter(employee => {
+    const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.toLowerCase();
+    const searchLower = searchQuery.toLowerCase();
+    return fullName.includes(searchLower) ||
+           (employee.email || '').toLowerCase().includes(searchLower) ||
+           (employee.phone || '').toLowerCase().includes(searchLower) ||
+           (employee.username || '').toLowerCase().includes(searchLower);
+  });
 
   return (
     <Box>
@@ -219,13 +309,6 @@ const Employees = () => {
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
             variant="outlined"
-            startIcon={<Upload />}
-            sx={{ borderColor: '#42956c', color: '#42956c' }}
-          >
-            Import
-          </Button>
-          <Button
-            variant="outlined"
             startIcon={<Download />}
             sx={{ borderColor: '#42956c', color: '#42956c' }}
           >
@@ -234,7 +317,7 @@ const Employees = () => {
           <Button
             variant="contained"
             startIcon={<Add />}
-            onClick={handleAddEmployee}
+            onClick={handleOpenAddDialog}
             sx={{ backgroundColor: '#42956c', '&:hover': { backgroundColor: '#357a59' } }}
           >
             Add Employee
@@ -258,13 +341,6 @@ const Employees = () => {
               ),
             }}
           />
-          <Button
-            variant="outlined"
-            startIcon={<FilterList />}
-            onClick={handleFilterOpen}
-          >
-            Filter
-          </Button>
         </Box>
 
         <TableContainer>
@@ -273,27 +349,48 @@ const Employees = () => {
               <TableRow>
                 <TableCell>Employee</TableCell>
                 <TableCell>Contact</TableCell>
-                <TableCell>Department</TableCell>
-                <TableCell>Position</TableCell>
-                <TableCell align="right">Salary</TableCell>
+                <TableCell>Role</TableCell>
+                <TableCell>User Group</TableCell>
+                <TableCell align="right">Basic Salary</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Join Date</TableCell>
+                <TableCell>Created Date</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredEmployees
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((employee) => (
-                  <TableRow key={employee.id} hover>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                    <CircularProgress />
+                  </TableCell>
+                </TableRow>
+              ) : filteredEmployees.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                    <Typography variant="body1" color="text.secondary">
+                      No employees found
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredEmployees.map((employee) => (
+                  <TableRow key={employee._id} hover>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar sx={{ bgcolor: '#42956c' }}>
-                          {employee.name.split(' ').map(n => n[0]).join('')}
+                          {employee.firstName && employee.lastName 
+                            ? `${employee.firstName[0]}${employee.lastName[0]}`.toUpperCase()
+                            : employee.username ? employee.username.substring(0, 2).toUpperCase() : 'U'
+                          }
                         </Avatar>
-                        <Typography variant="body2" fontWeight={500}>
-                          {employee.name}
-                        </Typography>
+                        <Box>
+                          <Typography variant="body2" fontWeight={500}>
+                            {`${employee.firstName || ''} ${employee.lastName || ''}`}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            @{employee.username}
+                          </Typography>
+                        </Box>
                       </Box>
                     </TableCell>
                     <TableCell>
@@ -308,21 +405,21 @@ const Employees = () => {
                         </Box>
                       </Box>
                     </TableCell>
-                    <TableCell>{employee.department}</TableCell>
-                    <TableCell>{employee.position}</TableCell>
+                    <TableCell>{employee.role || 'N/A'}</TableCell>
+                    <TableCell>{employee.userGroup || 'N/A'}</TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" fontWeight={500}>
-                        ${employee.salary.toLocaleString()}
+                        KES {(employee.basicSalary || 0).toLocaleString()}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={employee.status.replace('-', ' ')}
-                        color={getStatusColor(employee.status)}
+                        label={employee.isActive ? 'Active' : 'Inactive'}
+                        color={employee.isActive ? 'success' : 'error'}
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>{employee.joinDate}</TableCell>
+                    <TableCell>{new Date(employee.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell align="center">
                       <IconButton
                         size="small"
@@ -332,7 +429,8 @@ const Employees = () => {
                       </IconButton>
                     </TableCell>
                   </TableRow>
-                ))}
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -340,9 +438,9 @@ const Employees = () => {
         <TablePagination
           rowsPerPageOptions={[5, 10, 25]}
           component="div"
-          count={filteredEmployees.length}
+          count={totalEmployees}
           rowsPerPage={rowsPerPage}
-          page={page}
+          page={page - 1}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
@@ -414,6 +512,10 @@ const Employees = () => {
                 label="First Name"
                 fullWidth
                 size="small"
+                value={newEmployee.firstName}
+                onChange={(e) => setNewEmployee({...newEmployee, firstName: e.target.value})}
+                error={!!formErrors.firstName}
+                helperText={formErrors.firstName}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -421,6 +523,10 @@ const Employees = () => {
                 label="Last Name"
                 fullWidth
                 size="small"
+                value={newEmployee.lastName}
+                onChange={(e) => setNewEmployee({...newEmployee, lastName: e.target.value})}
+                error={!!formErrors.lastName}
+                helperText={formErrors.lastName}
               />
             </Grid>
             <Grid item xs={12}>
@@ -429,6 +535,10 @@ const Employees = () => {
                 type="email"
                 fullWidth
                 size="small"
+                value={newEmployee.email}
+                onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
+                error={!!formErrors.email}
+                helperText={formErrors.email}
               />
             </Grid>
             <Grid item xs={12}>
@@ -436,54 +546,43 @@ const Employees = () => {
                 label="Phone"
                 fullWidth
                 size="small"
+                value={newEmployee.phone}
+                onChange={(e) => setNewEmployee({...newEmployee, phone: e.target.value})}
+                error={!!formErrors.phone}
+                helperText={formErrors.phone || (newEmployee.phone.startsWith('07') ? `Will be saved as +254${newEmployee.phone.substring(1)}` : '')}
+                placeholder="0712345678"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Department</InputLabel>
-                <Select label="Department">
-                  <MenuItem value="engineering">Engineering</MenuItem>
-                  <MenuItem value="marketing">Marketing</MenuItem>
-                  <MenuItem value="sales">Sales</MenuItem>
-                  <MenuItem value="hr">HR</MenuItem>
-                  <MenuItem value="finance">Finance</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <TextField
-                label="Position"
-                fullWidth
-                size="small"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Salary"
+                label="Basic Salary (KES)"
                 type="number"
                 fullWidth
                 size="small"
+                value={newEmployee.basicSalary}
+                onChange={(e) => setNewEmployee({...newEmployee, basicSalary: e.target.value})}
+                error={!!formErrors.basicSalary}
+                helperText={formErrors.basicSalary}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Join Date"
-                type="date"
-                fullWidth
-                size="small"
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
+            {formErrors.submit && (
+              <Grid item xs={12}>
+                <Typography color="error" variant="body2">
+                  {formErrors.submit}
+                </Typography>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleCloseDialog} disabled={addingUser}>Cancel</Button>
           <Button
             variant="contained"
-            onClick={handleCloseDialog}
+            onClick={handleAddEmployee}
+            disabled={addingUser}
             sx={{ backgroundColor: '#42956c', '&:hover': { backgroundColor: '#357a59' } }}
           >
-            Add Employee
+            {addingUser ? 'Adding...' : 'Add Employee'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -29,7 +29,9 @@ const OTPVerification = () => {
   const inputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
   // Get reset data from location state or stored data
-  const resetData = location.state?.resetData || ResetDataManager.getResetData() || { type: 'email', identifier: 'user@example.com' };
+  const [resetData, setResetData] = useState(
+    location.state?.resetData || ResetDataManager.getResetData() || { type: 'email', identifier: 'user@example.com' }
+  );
 
   useEffect(() => {
     inputRefs[0].current?.focus();
@@ -84,7 +86,8 @@ const OTPVerification = () => {
     if (code.length === 4) {
       setIsLoading(true);
       try {
-        const result = await authService.verifyOTP(resetData.identifier, code);
+        // Use verifyResetOTP for password reset flow with userId
+        const result = await authService.verifyResetOTP(code, resetData.userId);
         
         if (result.success) {
           // Store verification token for password update
@@ -96,7 +99,8 @@ const OTPVerification = () => {
           navigate('/update-password', { 
             state: { 
               resetData: resetData,
-              verificationToken: result.token
+              verificationToken: result.token,
+              userId: resetData.userId
             } 
           });
         } else {
@@ -124,12 +128,19 @@ const OTPVerification = () => {
         );
         
         if (result.success && result.resetToken) {
-          // Update stored reset token
+          // Update stored reset token and userId
           ResetTokenManager.setResetToken(result.resetToken);
           ResetDataManager.setResetData({
             ...resetData,
-            resetToken: result.resetToken
+            resetToken: result.resetToken,
+            userId: result.user?.id || result.user?._id || result.user
           });
+          
+          // Update local resetData with new userId
+          setResetData(prevData => ({
+            ...prevData,
+            userId: result.user?.id || result.user?._id || result.user
+          }));
           
           setResendTimer(60);
           setCanResend(false);
@@ -168,10 +179,11 @@ const OTPVerification = () => {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
+          minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         <Paper
@@ -186,21 +198,20 @@ const OTPVerification = () => {
             position: 'relative',
           }}
         >
-          <IconButton
-            onClick={() => navigate('/reset-password')}
-            sx={{
-              position: 'absolute',
-              top: 16,
-              left: 16,
-              color: 'text.secondary',
-            }}
-          >
-            <ArrowBack />
-          </IconButton>
-
-          <Typography component="h1" variant="h4" fontWeight="bold" color="primary.main">
-            Verify Your Account
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', mb: 2 }}>
+            <IconButton
+              onClick={() => navigate('/reset-password')}
+              sx={{
+                mr: 1,
+                color: 'text.secondary',
+              }}
+            >
+              <ArrowBack />
+            </IconButton>
+            <Typography component="h1" variant="h6" fontWeight="bold" color="primary.main" sx={{ flex: 1, textAlign: 'center', mr: 5 }}>
+              Verify Your Account
+            </Typography>
+          </Box>
           <Typography variant="body1" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
             We've sent a 4-digit code to {formatIdentifier()}
           </Typography>

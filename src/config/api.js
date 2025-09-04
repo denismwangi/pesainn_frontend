@@ -34,6 +34,8 @@ export const API_ENDPOINTS = {
   
   // User endpoints
   USER_PROFILE: `${API_URL}/api/v1/users/profile`,
+  USERS: `${API_URL}/api/v1/users`,
+  ADD_USER: `${API_URL}/api/v1/users/add-user`,
   
   // Settings endpoints
   SETTINGS: `${API_URL}/api/settings`,

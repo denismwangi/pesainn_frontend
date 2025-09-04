@@ -60,7 +60,18 @@ const DashboardLayout = () => {
   useEffect(() => {
     // Get current user data from session
     const sessionData = authService.getCurrentUser();
+    console.log('Session data on load:', sessionData);
     if (sessionData && sessionData.user) {
+      console.log('Setting initial user:', sessionData.user);
+      
+      // Check if user is admin
+      if (sessionData.user.role !== 'Admin') {
+        console.log('Access denied: User is not an admin');
+        authService.logout();
+        navigate('/login');
+        return;
+      }
+      
       setCurrentUser(sessionData.user);
       // Fetch fresh profile data from API
       fetchUserProfile();
@@ -76,7 +87,19 @@ const DashboardLayout = () => {
       const result = await userService.getUserProfile();
       
       if (result.success && result.user) {
-        setCurrentUser(result.user);
+        console.log('Profile fetched successfully:', result.user);
+        // User data is already extracted by userService
+        const userData = result.user;
+        
+        // Check if user is admin
+        if (userData.role !== 'Admin') {
+          console.log('Access denied: User is not an admin');
+          authService.logout();
+          navigate('/login');
+          return;
+        }
+        
+        setCurrentUser(userData);
       } else if (!result.success && result.message.includes('authentication')) {
         // Token might be expired, redirect to login
         authService.logout();
@@ -145,12 +168,17 @@ const DashboardLayout = () => {
 
   const getUserInitials = () => {
     if (currentUser) {
+      console.log('Generating initials for user:', currentUser);
       if (currentUser.fullName) {
         return currentUser.fullName.split(' ').map(n => n[0]).join('').toUpperCase();
       } else if (currentUser.firstName && currentUser.lastName) {
         return (currentUser.firstName[0] + currentUser.lastName[0]).toUpperCase();
+      } else if (currentUser.name) {
+        return currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase();
       } else if (currentUser.username) {
         return currentUser.username.substring(0, 2).toUpperCase();
+      } else if (currentUser.email) {
+        return currentUser.email.substring(0, 2).toUpperCase();
       }
     }
     return 'U';
@@ -158,16 +186,41 @@ const DashboardLayout = () => {
 
   const getUserDisplayName = () => {
     if (currentUser) {
-      return currentUser.fullName || `${currentUser.firstName} ${currentUser.lastName}` || currentUser.username || 'User';
+      // Prioritize fullName field
+      if (currentUser.fullName) {
+        return currentUser.fullName;
+      }
+      if (currentUser.firstName && currentUser.lastName) {
+        return `${currentUser.firstName} ${currentUser.lastName}`.trim();
+      }
+      if (currentUser.name) {
+        return currentUser.name;
+      }
+      if (currentUser.username) {
+        return currentUser.username;
+      }
+      if (currentUser.email) {
+        // Use email prefix as fallback
+        return currentUser.email.split('@')[0];
+      }
     }
     return 'User';
   };
 
   const getUserRole = () => {
     if (currentUser) {
-      return currentUser.role || currentUser.userGroup || 'User';
+     // console.log('Getting role for user:', currentUser.user.role);
+      return currentUser.role || currentUser.userGroup || currentUser.userType || 'User';
     }
     return 'User';
+  };
+
+  const getUserEmail = () => {
+    // Directly return the email field
+    if (currentUser && currentUser.email) {
+      return currentUser.email;
+    }
+    return '';
   };
 
   const drawer = (
@@ -250,9 +303,11 @@ const DashboardLayout = () => {
                 {(drawerOpen || mobileOpen) && (
                   <ListItemText 
                     primary={item.text}
-                    primaryTypographyProps={{
-                      fontWeight: isActive ? 600 : 400,
-                      fontSize: '0.95rem',
+                    sx={{
+                      '& .MuiListItemText-primary': {
+                        fontWeight: isActive ? 600 : 400,
+                        fontSize: '0.95rem',
+                      }
                     }}
                   />
                 )}
@@ -275,10 +330,10 @@ const DashboardLayout = () => {
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="body2" fontWeight={600} noWrap>
-                {getUserDisplayName()}
+                {currentUser?.fullName || getUserDisplayName()}
               </Typography>
               <Typography variant="caption" color="text.secondary" noWrap>
-                {getUserRole()}
+                {currentUser?.email || getUserRole()}
               </Typography>
             </Box>
             <Tooltip title="Refresh Profile">
@@ -365,12 +420,12 @@ const DashboardLayout = () => {
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
           >
-            <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography variant="subtitle2" fontWeight="bold">
-                {getUserDisplayName()}
+            <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', minWidth: 200 }}>
+              <Typography variant="subtitle2" fontWeight="bold" noWrap>
+                {currentUser?.fullName || getUserDisplayName()}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {currentUser?.email || 'No email'}
+              <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                {currentUser?.email || getUserEmail()}
               </Typography>
             </Box>
             <MenuItem onClick={() => { handleProfileMenuClose(); fetchUserProfile(); }}>
@@ -406,8 +461,10 @@ const DashboardLayout = () => {
             onClose={handleNotificationClose}
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            PaperProps={{
-              sx: { width: 320, maxHeight: 400 }
+            slotProps={{
+              paper: {
+                sx: { width: 320, maxHeight: 400 }
+              }
             }}
           >
             <Box sx={{ p: 2 }}>

@@ -71,7 +71,13 @@ const Login = () => {
       setIsLoading(true);
       setErrors({});
       
-      const identifier = loginType === 'email' ? email : phone;
+      // Format phone number with +254 if it starts with 07
+      let formattedPhone = phone;
+      if (loginType === 'phone' && phone.startsWith('07')) {
+        formattedPhone = '+254' + phone.substring(1);
+      }
+      
+      const identifier = loginType === 'email' ? email : formattedPhone;
       
       try {
         // Call auth service to login
@@ -119,10 +125,11 @@ const Login = () => {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
+          minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         <Paper
@@ -185,9 +192,10 @@ const Login = () => {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   error={!!errors.phone}
-                  helperText={errors.phone}
+                  helperText={errors.phone || (phone.startsWith('07') ? `Will be sent as +254${phone.substring(1)}` : 'Enter phone number (e.g., 0712345678)')}
                   autoComplete="tel"
                   autoFocus
+                  placeholder="0712345678"
                 />
               )}
 

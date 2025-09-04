@@ -22,17 +22,61 @@ class AuthService {
       }
 
       if (data.success && data.data) {
-        // Store token and user data securely
+        // Store the token temporarily
+        const token = data.data.token;
+        
+        // Fetch the user profile with the new token
+        const profileResponse = await fetch(API_ENDPOINTS.USER_PROFILE, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const profileData = await profileResponse.json();
+
+        if (!profileResponse.ok) {
+          // If profile fetch fails, still use login data
+          console.error('Failed to fetch profile:', profileData.message);
+          SessionManager.createSession(
+            token,
+            data.data.user,
+            true // remember me - can be made configurable
+          );
+
+          return {
+            success: true,
+            user: data.data.user,
+            token: token,
+            message: data.message
+          };
+        }
+
+        // Use the profile data if successfully fetched (handle nested structure: data.data.user)
+        const userData = profileData.success 
+          ? (profileData.data?.user || profileData.user || profileData.data) 
+          : data.data.user;
+        
+        // Check if user is admin
+        if (userData && userData.role != 'Admin') {
+          return {
+            success: false,
+            message: 'Login Failed.'
+          };
+        }
+        
+        // Store token and user profile data securely
         SessionManager.createSession(
-          data.data.token,
-          data.data.user,
+          token,
+          userData,
           true // remember me - can be made configurable
         );
 
         return {
           success: true,
-          user: data.data.user,
-          token: data.data.token,
+          user: userData,
+          token: token,
           message: data.message
         };
       }

@@ -74,7 +74,8 @@ const ResetPassword = () => {
           ResetDataManager.setResetData({
             type: resetType,
             identifier: resetType === 'email' ? email : phone,
-            resetToken: result.resetToken
+            resetToken: result.resetToken,
+            userId: result.user?.id || result.user?._id || result.user
           });
           
           setIsSubmitted(true);
@@ -84,14 +85,15 @@ const ResetPassword = () => {
             severity: 'success'
           });
           
-          // Navigate to OTP verification with reset token
+          // Navigate to OTP verification with reset token and userId
           setTimeout(() => {
             navigate('/otp-verification', { 
               state: { 
                 resetData: {
                   type: resetType,
                   identifier: resetType === 'email' ? email : phone,
-                  resetToken: result.resetToken
+                  resetToken: result.resetToken,
+                  userId: result.user?.id || result.user?._id || result.user
                 }
               } 
             });
@@ -124,10 +126,11 @@ const ResetPassword = () => {
       <Container component="main" maxWidth="xs">
         <Box
           sx={{
-            marginTop: 8,
+            minHeight: '100vh',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           <Paper
@@ -194,10 +197,11 @@ const ResetPassword = () => {
     <Container component="main" maxWidth="xs">
       <Box
         sx={{
-          marginTop: 8,
+          minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         <Paper
@@ -212,21 +216,20 @@ const ResetPassword = () => {
             position: 'relative',
           }}
         >
-          <IconButton
-            onClick={() => navigate('/login')}
-            sx={{
-              position: 'absolute',
-              top: 16,
-              left: 16,
-              color: 'text.secondary',
-            }}
-          >
-            <ArrowBack />
-          </IconButton>
-
-          <Typography component="h1" variant="h4" fontWeight="bold" color="primary.main">
-            Reset Password
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', mb: 2 }}>
+            <IconButton
+              onClick={() => navigate('/login')}
+              sx={{
+                mr: 1,
+                color: 'text.secondary',
+              }}
+            >
+              <ArrowBack />
+            </IconButton>
+            <Typography component="h1" variant="h6" fontWeight="bold" color="primary.main" sx={{ flex: 1, textAlign: 'center', mr: 5 }}>
+              Reset Password
+            </Typography>
+          </Box>
           <Typography variant="body1" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
             Enter your {resetType === 'email' ? 'email address' : 'phone number'} and we'll send you a verification code
           </Typography>
