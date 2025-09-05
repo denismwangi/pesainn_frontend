@@ -24,18 +24,28 @@ export const API_ENDPOINTS = {
   
   // Loan endpoints
   LOANS: `${API_URL}/api/loans`,
-  LOAN_BY_ID: (id) => `${API_URL}/api/loans/${id}`,
+  LOANS_WITH_USER_INFO: `${API_URL}/api/v1/loans/with-user-info`,
+  CREATE_LOAN: `${API_URL}/api/v1/loans`,
+  LOAN_TYPES: `${API_URL}/api/v1/loan-types`,
+  LOAN_BY_ID: (id) => `${API_URL}/api/v1/loans/${id}`,
+  UPDATE_LOAN_STATUS: (id) => `${API_URL}/api/v1/loans/${id}/status`,
+  RECEIVE_LOAN_PAYMENT: (id) => `${API_URL}/api/v1/loans/${id}/payments`,
   APPROVE_LOAN: (id) => `${API_URL}/api/loans/${id}/approve`,
   REJECT_LOAN: (id) => `${API_URL}/api/loans/${id}/reject`,
   
   // Transaction endpoints
-  TRANSACTIONS: `${API_URL}/api/transactions`,
-  TRANSACTION_BY_ID: (id) => `${API_URL}/api/transactions/${id}`,
+  TRANSACTIONS: `${API_URL}/api/v1/transactions`,
+  TRANSACTION_BY_ID: (id) => `${API_URL}/api/v1/transactions/${id}`,
   
   // User endpoints
   USER_PROFILE: `${API_URL}/api/v1/users/profile`,
   USERS: `${API_URL}/api/v1/users`,
   ADD_USER: `${API_URL}/api/v1/users/add-user`,
+  EMPLOYEE_DETAILS: (id) => `${API_URL}/api/v1/users/employee/${id}`,
+  EMPLOYEE_STATISTICS: `${API_URL}/api/v1/users/employee-statistics`,
+  UPDATE_EMPLOYEE_SALARY: (id) => `${API_URL}/api/v1/users/${id}/salary`,
+  APPROVE_USER: `${API_URL}/api/v1/business/users/approve`,
+  REJECT_USER: `${API_URL}/api/v1/business/users/reject`,
   
   // Settings endpoints
   SETTINGS: `${API_URL}/api/settings`,

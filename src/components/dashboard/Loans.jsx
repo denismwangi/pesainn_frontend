@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import loanService from '../../services/loanService';
 import {
   Box,
   Paper,
   Typography,
-  Grid,
   Card,
   CardContent,
   Button,
@@ -14,48 +15,161 @@ import {
   TableHead,
   TableRow,
   Chip,
-  LinearProgress,
   Avatar,
   IconButton,
   Menu,
-  MenuItem
+  MenuItem,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   AttachMoney,
   TrendingUp,
   Schedule,
-  Warning,
   MoreVert,
   Add,
   CheckCircle,
-  Cancel
+  Cancel,
+  AccountBalance,
+  Paid,
+  MonetizationOn
 } from '@mui/icons-material';
 
 const Loans = () => {
+  const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [statistics, setStatistics] = useState({});
+  const [loans, setLoans] = useState([]);
+  const [updating, setUpdating] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, loan: null, action: null });
+
+  useEffect(() => {
+    fetchLoanStatistics();
+  }, []);
+
+  const fetchLoanStatistics = async () => {
+    setLoading(true);
+    try {
+      const result = await loanService.getLoansWithUserInfo(1, 10);
+      if (result.success) {
+        setStatistics(result.statistics || {});
+        setLoans(result.loans || []);
+      } else {
+        console.warn('Failed to fetch loan statistics:', result.message);
+        setStatistics({});
+        setLoans([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch loan statistics:', error);
+      setStatistics({});
+      setLoans([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES'
+    }).format(amount);
+  };
 
   const loanStats = [
-    { label: 'Total Loans', value: '$458,320', icon: <AttachMoney />, color: '#42956c' },
-    { label: 'Active Loans', value: '45', icon: <TrendingUp />, color: '#2196f3' },
-    { label: 'Pending Approval', value: '12', icon: <Schedule />, color: '#ff9800' },
-    { label: 'Defaulted', value: '3', icon: <Warning />, color: '#f44336' },
-  ];
-
-  const loans = [
-    { id: 1, employee: 'John Doe', amount: 15000, purpose: 'Home Renovation', rate: '5%', term: '12 months', status: 'active', paid: 45 },
-    { id: 2, employee: 'Jane Smith', amount: 8000, purpose: 'Medical Emergency', rate: '4%', term: '6 months', status: 'active', paid: 67 },
-    { id: 3, employee: 'Mike Johnson', amount: 25000, purpose: 'Education', rate: '3%', term: '24 months', status: 'pending', paid: 0 },
-    { id: 4, employee: 'Sarah Williams', amount: 5000, purpose: 'Personal', rate: '6%', term: '3 months', status: 'completed', paid: 100 },
-    { id: 5, employee: 'Tom Brown', amount: 12000, purpose: 'Car Purchase', rate: '5%', term: '18 months', status: 'active', paid: 30 },
+    { 
+      label: 'Pending Approval', 
+      value: loading ? '...' : `${statistics.pendingApproval || 0}`, 
+      icon: <Schedule />, 
+      color: '#ff9800' 
+    },
+    { 
+      label: 'Pending Amount', 
+      value: loading ? '...' : formatCurrency(statistics.pendingApprovalAmount || 0), 
+      icon: <AttachMoney />, 
+      color: '#f44336' 
+    },
+    { 
+      label: 'Approved Loans', 
+      value: loading ? '...' : `${statistics.approvedLoans || 0}`, 
+      icon: <CheckCircle />, 
+      color: '#42956c' 
+    },
+    { 
+      label: 'Approved Amount', 
+      value: loading ? '...' : formatCurrency(statistics.approvedAmount || 0), 
+      icon: <TrendingUp />, 
+      color: '#2196f3' 
+    },
+    { 
+      label: 'Loans Paid', 
+      value: loading ? '...' : `${statistics.loansPaid || 0}`, 
+      icon: <Paid />, 
+      color: '#4caf50' 
+    },
+    { 
+      label: 'Paid Amount', 
+      value: loading ? '...' : formatCurrency(statistics.paidAmount || 0), 
+      icon: <AccountBalance />, 
+      color: '#00bcd4' 
+    },
+    { 
+      label: 'Interest Earned', 
+      value: loading ? '...' : formatCurrency(statistics.interestEarned || 0), 
+      icon: <MonetizationOn />, 
+      color: '#9c27b0' 
+    },
   ];
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': return 'primary';
+    switch (status?.toLowerCase()) {
+      case 'approved': return 'success';
       case 'pending': return 'warning';
-      case 'completed': return 'success';
-      case 'defaulted': return 'error';
+      case 'rejected': return 'error';
+      case 'paid': return 'primary';
       default: return 'default';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const handleOpenConfirmDialog = (loan, action) => {
+    setConfirmDialog({ open: true, loan, action });
+  };
+
+  const handleCloseConfirmDialog = () => {
+    setConfirmDialog({ open: false, loan: null, action: null });
+  };
+
+  const handleConfirmStatusUpdate = async () => {
+    const { loan, action } = confirmDialog;
+    const loanId = loan._id || loan.id;
+    
+    handleCloseConfirmDialog();
+    setUpdating(loanId);
+    
+    try {
+      const result = await loanService.updateLoanStatus(loanId, action);
+      if (result.success) {
+        // Refresh the loans list
+        await fetchLoanStatistics();
+      } else {
+        console.error('Failed to update loan status:', result.message);
+      }
+    } catch (error) {
+      console.error('Error updating loan status:', error);
+    } finally {
+      setUpdating(null);
     }
   };
 
@@ -73,35 +187,64 @@ const Loans = () => {
         <Button
           variant="contained"
           startIcon={<Add />}
+          onClick={() => navigate('/loan-request')}
           sx={{ backgroundColor: '#42956c', '&:hover': { backgroundColor: '#357a59' } }}
         >
           New Loan Request
         </Button>
       </Box>
 
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {loanStats.map((stat, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography color="text.secondary" variant="body2">
-                      {stat.label}
-                    </Typography>
-                    <Typography variant="h5" fontWeight="bold" sx={{ mt: 1, color: stat.color }}>
-                      {stat.value}
-                    </Typography>
+ <Box sx={{ width: '100%', mb: 3 }}>
+           <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
+
+          {loanStats.slice(0, 4).map((stat, index) => (
+              <Card key={index} sx={{ width: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography color="text.secondary" variant="body2">
+                        {stat.label}
+                      </Typography>
+                      <Typography variant="h5" fontWeight="bold" sx={{ mt: 1, color: stat.color }}>
+                        {stat.value}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ color: stat.color, opacity: 0.3, fontSize: 40 }}>
+                      {stat.icon}
+                    </Box>
                   </Box>
-                  <Box sx={{ color: stat.color, opacity: 0.3, fontSize: 40 }}>
-                    {stat.icon}
+                </CardContent>
+              </Card>
+           
+          ))}
+       
+          </Box>
+      </Box>
+ <Box sx={{ width: '100%', mb: 3 }}>
+          <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
+          {loanStats.slice(4).map((stat, index) => (
+              <Card key={index} sx={{ width: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography color="text.secondary" variant="body2">
+                        {stat.label}
+                      </Typography>
+                      <Typography variant="h5" fontWeight="bold" sx={{ mt: 1, color: stat.color }}>
+                        {stat.value}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ color: stat.color, opacity: 0.3, fontSize: 40 }}>
+                      {stat.icon}
+                    </Box>
                   </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+                </CardContent>
+              </Card>
+           
+          ))}
+     
+        </Box>
+      </Box>
 
       <Paper sx={{ p: 3 }}>
         <Typography variant="h6" fontWeight="bold" sx={{ mb: 3 }}>
@@ -113,77 +256,117 @@ const Loans = () => {
               <TableRow>
                 <TableCell>Employee</TableCell>
                 <TableCell align="right">Amount</TableCell>
-                <TableCell>Purpose</TableCell>
+                <TableCell>Loan Type</TableCell>
                 <TableCell>Interest Rate</TableCell>
-                <TableCell>Term</TableCell>
+                <TableCell>Due Date</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Progress</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {loans.map((loan) => (
-                <TableRow key={loan.id}>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Avatar sx={{ bgcolor: '#42956c', width: 32, height: 32, fontSize: 14 }}>
-                        {loan.employee.split(' ').map(n => n[0]).join('')}
-                      </Avatar>
-                      <Typography variant="body2">{loan.employee}</Typography>
-                    </Box>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                    <CircularProgress />
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body2" fontWeight="bold">
-                      ${loan.amount.toLocaleString()}
+                </TableRow>
+              ) : loans.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                    <Typography variant="body1" color="text.secondary">
+                      No loans found
                     </Typography>
                   </TableCell>
-                  <TableCell>{loan.purpose}</TableCell>
-                  <TableCell>{loan.rate}</TableCell>
-                  <TableCell>{loan.term}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={loan.status}
-                      size="small"
-                      color={getStatusColor(loan.status)}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ width: 150 }}>
-                    <Box>
-                      <LinearProgress
-                        variant="determinate"
-                        value={loan.paid}
-                        sx={{
-                          height: 6,
-                          borderRadius: 3,
-                          backgroundColor: '#e0e0e0',
-                          '& .MuiLinearProgress-bar': {
-                            backgroundColor: loan.paid === 100 ? '#42956c' : '#2196f3',
-                          }
-                        }}
-                      />
-                      <Typography variant="caption" color="text.secondary">
-                        {loan.paid}% paid
-                      </Typography>
-                    </Box>
-                  </TableCell>
+                </TableRow>
+              ) : (
+                loans.map((loan) => {
+                  return (
+                    <TableRow 
+                      key={loan.id}
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': { backgroundColor: 'action.hover' }
+                      }}
+                      onClick={() => navigate(`/loans/${loan._id || loan.id}`)}
+                    >
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Avatar sx={{ bgcolor: '#42956c', width: 32, height: 32, fontSize: 14 }}>
+                            {loan.user?.fullName?.split(' ').map(n => n[0]).join('') || 'U'}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2">{loan.user?.fullName || 'Unknown'}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {loan.user?.email}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" fontWeight="bold">
+                          {formatCurrency(loan.amount)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{loan.loanType}</TableCell>
+                      <TableCell>{loan.interestRate}% {loan.interestType}</TableCell>
+                      <TableCell>{formatDate(loan.dueDate)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={loan.status}
+                          size="small"
+                          color={getStatusColor(loan.status)}
+                        />
+                      </TableCell>
                   <TableCell align="center">
-                    {loan.status === 'pending' ? (
+                    {loan.status?.toLowerCase() === 'pending' ? (
                       <Box sx={{ display: 'flex', gap: 1 }}>
-                        <IconButton size="small" color="success">
-                          <CheckCircle />
+                        <IconButton 
+                          size="small" 
+                          color="success"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenConfirmDialog(loan, 'Approved');
+                          }}
+                          disabled={updating === (loan._id || loan.id)}
+                        >
+                          {updating === (loan._id || loan.id) ? (
+                            <CircularProgress size={16} />
+                          ) : (
+                            <CheckCircle />
+                          )}
                         </IconButton>
-                        <IconButton size="small" color="error">
-                          <Cancel />
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenConfirmDialog(loan, 'Rejected');
+                          }}
+                          disabled={updating === (loan._id || loan.id)}
+                        >
+                          {updating === (loan._id || loan.id) ? (
+                            <CircularProgress size={16} />
+                          ) : (
+                            <Cancel />
+                          )}
                         </IconButton>
                       </Box>
                     ) : (
-                      <IconButton size="small" onClick={(e) => setAnchorEl(e.currentTarget)}>
+                      <IconButton 
+                        size="small" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAnchorEl(e.currentTarget);
+                        }}
+                      >
                         <MoreVert />
                       </IconButton>
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+                })
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -194,6 +377,45 @@ const Loans = () => {
         <MenuItem>Edit Terms</MenuItem>
         <MenuItem>Payment History</MenuItem>
       </Menu>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onClose={handleCloseConfirmDialog}
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
+      >
+        <DialogTitle id="confirm-dialog-title">
+          {confirmDialog.action === 'Approved' ? 'Approve Loan' : 'Reject Loan'}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="confirm-dialog-description">
+            {confirmDialog.loan && (
+              <>
+                Are you sure you want to {confirmDialog.action === 'Approved' ? 'approve' : 'reject'} this loan request?
+                <br /><br />
+                <strong>Employee:</strong> {confirmDialog.loan.user?.fullName || 'Unknown'}<br />
+                <strong>Amount:</strong> {formatCurrency(confirmDialog.loan.amount)}<br />
+                <strong>Loan Type:</strong> {confirmDialog.loan.loanType}<br />
+                <strong>Due Date:</strong> {formatDate(confirmDialog.loan.dueDate)}
+              </>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseConfirmDialog} color="inherit">
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmStatusUpdate} 
+            color={confirmDialog.action === 'Approved' ? 'success' : 'error'}
+            variant="contained"
+            autoFocus
+          >
+            {confirmDialog.action === 'Approved' ? 'Approve' : 'Reject'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

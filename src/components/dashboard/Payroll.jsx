@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import userService from '../../services/userService';
 import {
   Box,
   Paper,
   Typography,
-  Grid,
   Card,
   CardContent,
   Button,
@@ -18,7 +19,15 @@ import {
   Tab,
   Tabs,
   TextField,
-  InputAdornment
+  InputAdornment,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
+  Alert,
+  IconButton
 } from '@mui/material';
 import {
   AccountBalance,
@@ -26,19 +35,107 @@ import {
   Schedule,
   People,
   Search,
-  Download,
-  PlayArrow
+  PlayArrow,
+  Edit,
+  Close
 } from '@mui/icons-material';
 
 const Payroll = () => {
+  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [statistics, setStatistics] = useState({});
+  const [employees, setEmployees] = useState([]);
+  const [salaryModalOpen, setSalaryModalOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [newSalary, setNewSalary] = useState('');
+  const [updating, setUpdating] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    fetchEmployeeStatistics();
+  }, []);
+
+  const fetchEmployeeStatistics = async () => {
+    setLoading(true);
+    try {
+      const result = await userService.getEmployeeStatistics(1, 10);
+      if (result.success) {
+        setStatistics(result.statistics || {});
+        setEmployees(result.users || []);
+      } else {
+        console.warn('Failed to fetch employee statistics:', result.message);
+        setStatistics({});
+        setEmployees([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch employee statistics:', error);
+      setStatistics({});
+      setEmployees([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES'
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getNextPayrollDate = () => {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 5);
+    return nextMonth.toLocaleDateString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getDaysUntilPayroll = () => {
+    const today = new Date();
+    const nextPayroll = new Date(today.getFullYear(), today.getMonth() + 1, 5);
+    const diffTime = nextPayroll - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return `${diffDays} days`;
+  };
 
   const payrollSummary = [
-    { label: 'Total Payroll This Month', value: '$125,430', change: '+8%', icon: <AccountBalance /> },
-    { label: 'Employees Paid', value: '215/248', change: '87%', icon: <People /> },
-    { label: 'Average Salary', value: '$5,834', change: '+2%', icon: <TrendingUp /> },
-    { label: 'Next Payroll', value: 'Dec 25', change: '5 days', icon: <Schedule /> },
+    { 
+      label: 'Total Basic Salary', 
+      value: loading ? '...' : formatCurrency(statistics.totalBasicSalary || 0), 
+      change: '+8%', 
+      icon: <AccountBalance /> 
+    },
+    { 
+      label: 'Total Employees', 
+      value: loading ? '...' : `${statistics.totalEmployees || 0}`, 
+      change: '100%', 
+      icon: <People /> 
+    },
+    { 
+      label: 'Total Loans', 
+      value: loading ? '...' : formatCurrency(statistics.totalLoans || 0), 
+      change: '+2%', 
+      icon: <TrendingUp /> 
+    },
+    { 
+      label: 'Next Payroll', 
+      value: getNextPayrollDate(), 
+      change: getDaysUntilPayroll(), 
+      icon: <Schedule /> 
+    },
   ];
 
   const payrollHistory = [
@@ -48,13 +145,83 @@ const Payroll = () => {
     { id: 4, month: 'August 2024', amount: 112500, employees: 240, status: 'completed', date: '2024-08-25' },
   ];
 
-  const upcomingPayroll = [
-    { id: 1, name: 'John Doe', department: 'Engineering', salary: 7500, tax: 1500, net: 6000, status: 'pending' },
-    { id: 2, name: 'Jane Smith', department: 'Marketing', salary: 6800, tax: 1360, net: 5440, status: 'pending' },
-    { id: 3, name: 'Mike Johnson', department: 'Sales', salary: 5500, tax: 1100, net: 4400, status: 'approved' },
-    { id: 4, name: 'Sarah Williams', department: 'HR', salary: 6200, tax: 1240, net: 4960, status: 'approved' },
-    { id: 5, name: 'Tom Brown', department: 'Finance', salary: 5000, tax: 1000, net: 4000, status: 'pending' },
-  ];
+  const calculateTax = (salary) => {
+    // Simple tax calculation - 20% of salary
+    return salary * 0.2;
+  };
+
+  const upcomingPayroll = employees.map(employee => ({
+    id: employee.id,
+    name: `${employee.firstName} ${employee.lastName}`,
+    department: employee.userGroup || 'Employee',
+    salary: employee.basicSalary || 0,
+    tax: calculateTax(employee.basicSalary || 0),
+    net: (employee.basicSalary || 0) - calculateTax(employee.basicSalary || 0),
+    status: employee.basicSalary > 0 ? 'approved' : 'pending',
+    email: employee.email,
+    joinedAt: employee.joinedAt
+  }));
+
+  const filteredEmployees = upcomingPayroll.filter(employee => 
+    employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    employee.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleEmployeeClick = (employeeId) => {
+    navigate(`/employees/${employeeId}`);
+  };
+
+  const handleUpdateSalary = (employee) => {
+    setSelectedEmployee(employee);
+    setNewSalary(employee.salary.toString());
+    setSalaryModalOpen(true);
+  };
+
+  const handleSalaryUpdate = async () => {
+    if (!selectedEmployee || !newSalary) return;
+
+    setUpdating(true);
+    try {
+      const result = await userService.updateEmployeeSalary(selectedEmployee.id, parseFloat(newSalary));
+      if (result.success) {
+        setSnackbar({
+          open: true,
+          message: result.message || 'Salary updated successfully!',
+          severity: 'success'
+        });
+        setSalaryModalOpen(false);
+        setNewSalary('');
+        setSelectedEmployee(null);
+        // Refresh employee data
+        await fetchEmployeeStatistics();
+      } else {
+        setSnackbar({
+          open: true,
+          message: result.message || 'Failed to update salary',
+          severity: 'error'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating salary:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to update salary',
+        severity: 'error'
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleCloseSalaryModal = () => {
+    setSalaryModalOpen(false);
+    setNewSalary('');
+    setSelectedEmployee(null);
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   return (
     <Box>
@@ -69,13 +236,6 @@ const Payroll = () => {
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
-            variant="outlined"
-            startIcon={<Download />}
-            sx={{ borderColor: '#42956c', color: '#42956c' }}
-          >
-            Export Report
-          </Button>
-          <Button
             variant="contained"
             startIcon={<PlayArrow />}
             sx={{ backgroundColor: '#42956c', '&:hover': { backgroundColor: '#357a59' } }}
@@ -86,10 +246,10 @@ const Payroll = () => {
       </Box>
 
       {/* Summary Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {payrollSummary.map((item, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card>
+      <Box sx={{ width: '100%', mb: 3 }}>
+      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
+          {payrollSummary.map((item, index) => (
+              <Card key={index} sx={{ height: '100%', width: '100%' }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Box>
@@ -99,9 +259,7 @@ const Payroll = () => {
                     <Typography variant="h5" fontWeight="bold" sx={{ mt: 1 }}>
                       {item.value}
                     </Typography>
-                    <Typography variant="body2" sx={{ mt: 1, color: '#42956c' }}>
-                      {item.change}
-                    </Typography>
+  
                   </Box>
                   <Box sx={{ color: '#42956c', opacity: 0.3 }}>
                     {item.icon}
@@ -109,13 +267,14 @@ const Payroll = () => {
                 </Box>
               </CardContent>
             </Card>
-          </Grid>
+       
         ))}
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
-        <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)} sx={{ px: 3 }}>
+        <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ px: 3 }}>
           <Tab label="Upcoming Payroll" />
           <Tab label="Payroll History" />
         </Tabs>
@@ -131,17 +290,17 @@ const Payroll = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               size="small"
               sx={{ width: 300 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search />
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search />
+                    </InputAdornment>
+                  ),
+                }
               }}
             />
-            <Typography variant="h6">
-              Total: <strong>$28,900</strong>
-            </Typography>
+           
           </Box>
           <TableContainer>
             <Table>
@@ -153,27 +312,65 @@ const Payroll = () => {
                   <TableCell align="right">Tax</TableCell>
                   <TableCell align="right">Net Salary</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {upcomingPayroll.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.name}</TableCell>
-                    <TableCell>{row.department}</TableCell>
-                    <TableCell align="right">${row.salary.toLocaleString()}</TableCell>
-                    <TableCell align="right">${row.tax.toLocaleString()}</TableCell>
-                    <TableCell align="right">
-                      <strong>${row.net.toLocaleString()}</strong>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={row.status}
-                        size="small"
-                        color={row.status === 'approved' ? 'success' : 'warning'}
-                      />
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                      <CircularProgress />
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : filteredEmployees.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                      <Typography variant="body1" color="text.secondary">
+                        No employees found
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredEmployees.map((row) => (
+                    <TableRow 
+                      key={row.id} 
+                      hover
+                    >
+                      <TableCell>{row.name}</TableCell>
+                      <TableCell>{row.department}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.salary)}</TableCell>
+                      <TableCell align="right">{formatCurrency(row.tax)}</TableCell>
+                      <TableCell align="right">
+                        <strong>{formatCurrency(row.net)}</strong>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={row.status}
+                          size="small"
+                          color={row.status === 'approved' ? 'success' : 'warning'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<Edit />}
+                          onClick={() => handleUpdateSalary(row)}
+                          sx={{ 
+                            borderColor: '#42956c', 
+                            color: '#42956c',
+                            '&:hover': { 
+                              backgroundColor: '#42956c10',
+                              borderColor: '#42956c'
+                            }
+                          }}
+                        >
+                          Update Salary
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -229,6 +426,62 @@ const Payroll = () => {
           </TableContainer>
         </Paper>
       )}
+
+      {/* Update Salary Modal */}
+      <Dialog open={salaryModalOpen} onClose={handleCloseSalaryModal} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            Update Salary - {selectedEmployee?.name}
+            <IconButton onClick={handleCloseSalaryModal} size="small">
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="New Salary (KES)"
+            type="number"
+            fullWidth
+            variant="outlined"
+            value={newSalary}
+            onChange={(e) => setNewSalary(e.target.value)}
+            sx={{ mt: 2 }}
+            slotProps={{
+              htmlInput: { min: 0, step: 1000 }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseSalaryModal} color="inherit">
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSalaryUpdate} 
+            variant="contained"
+            disabled={updating || !newSalary}
+            sx={{ 
+              backgroundColor: '#42956c', 
+              '&:hover': { backgroundColor: '#357a59' } 
+            }}
+          >
+            {updating ? <CircularProgress size={20} color="inherit" /> : 'Update Salary'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

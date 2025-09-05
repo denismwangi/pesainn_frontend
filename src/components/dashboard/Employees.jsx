@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import userService from '../../services/userService';
 import {
   Box,
@@ -34,16 +35,15 @@ import {
   Add,
   FilterList,
   MoreVert,
-  Edit,
-  Delete,
   Email,
   Phone,
-  Download,
-  Upload
+  Upload,
+  Visibility
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 
 const Employees = () => {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
@@ -204,6 +204,17 @@ const Employees = () => {
     setSelectedEmployee(null);
   };
 
+  const handleViewEmployee = (employeeId) => {
+    navigate(`/employees/${employeeId}`);
+  };
+
+  const handleViewFromMenu = () => {
+    if (selectedEmployee) {
+      navigate(`/employees/${selectedEmployee._id}`);
+    }
+    handleMenuClose();
+  };
+
   const handleFilterOpen = (event) => {
     setFilterAnchor(event.currentTarget);
   };
@@ -273,13 +284,13 @@ const Employees = () => {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active':
+  const getStatusColor = (userState) => {
+    switch (userState) {
+      case 'Approved':
         return 'success';
-      case 'on-leave':
+      case 'Pending_Approval':
         return 'warning';
-      case 'inactive':
+      case 'Rejected':
         return 'error';
       default:
         return 'default';
@@ -307,13 +318,6 @@ const Employees = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<Download />}
-            sx={{ borderColor: '#42956c', color: '#42956c' }}
-          >
-            Export
-          </Button>
           <Button
             variant="contained"
             startIcon={<Add />}
@@ -352,7 +356,7 @@ const Employees = () => {
                 <TableCell>Role</TableCell>
                 <TableCell>User Group</TableCell>
                 <TableCell align="right">Basic Salary</TableCell>
-                <TableCell>Status</TableCell>
+                <TableCell>User State</TableCell>
                 <TableCell>Created Date</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
@@ -374,7 +378,12 @@ const Employees = () => {
                 </TableRow>
               ) : (
                 filteredEmployees.map((employee) => (
-                  <TableRow key={employee._id} hover>
+                  <TableRow 
+                    key={employee._id} 
+                    hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => handleViewEmployee(employee._id)}
+                  >
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar sx={{ bgcolor: '#42956c' }}>
@@ -414,8 +423,8 @@ const Employees = () => {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={employee.isActive ? 'Active' : 'Inactive'}
-                        color={employee.isActive ? 'success' : 'error'}
+                        label={employee.userState === 'Pending_Approval' ? 'Pending Approval' : (employee.userState || 'Pending Approval')}
+                        color={getStatusColor(employee.userState)}
                         size="small"
                       />
                     </TableCell>
@@ -423,7 +432,10 @@ const Employees = () => {
                     <TableCell align="center">
                       <IconButton
                         size="small"
-                        onClick={(e) => handleMenuOpen(e, employee)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMenuOpen(e, employee);
+                        }}
                       >
                         <MoreVert />
                       </IconButton>
@@ -452,13 +464,9 @@ const Employees = () => {
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
       >
-        <MenuItem onClick={handleMenuClose}>
-          <Edit sx={{ mr: 1, fontSize: 20 }} />
-          Edit
-        </MenuItem>
-        <MenuItem onClick={handleMenuClose}>
-          <Delete sx={{ mr: 1, fontSize: 20 }} />
-          Delete
+        <MenuItem onClick={handleViewFromMenu}>
+          <Visibility sx={{ mr: 1, fontSize: 20 }} />
+          View Details
         </MenuItem>
       </Menu>
 
@@ -467,8 +475,10 @@ const Employees = () => {
         anchorEl={filterAnchor}
         open={Boolean(filterAnchor)}
         onClose={handleFilterClose}
-        PaperProps={{
-          sx: { width: 250, p: 2 }
+        slotProps={{
+          paper: {
+            sx: { width: 250, p: 2 }
+          }
         }}
       >
         <Typography variant="subtitle2" sx={{ mb: 2 }}>

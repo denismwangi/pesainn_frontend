@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import transactionService from '../../services/transactionService';
 import {
   Box,
   Paper,
@@ -15,42 +16,96 @@ import {
   FormControl,
   Select,
   MenuItem,
-  Button,
-  Avatar
+  Avatar,
+  CircularProgress,
+  TablePagination,
+  IconButton
 } from '@mui/material';
 import {
   Search,
   FilterList,
-  Download,
   ArrowUpward,
-  ArrowDownward
+  ArrowDownward,
+  Refresh
 } from '@mui/icons-material';
 
 const Transactions = () => {
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalTransactions, setTotalTransactions] = useState(0);
 
-  const transactions = [
-    { id: 'TRX001', date: '2024-12-20 09:30', employee: 'John Doe', type: 'salary', amount: 5200, status: 'completed', description: 'Monthly Salary' },
-    { id: 'TRX002', date: '2024-12-20 10:15', employee: 'Jane Smith', type: 'loan', amount: -3000, status: 'pending', description: 'Loan Disbursement' },
-    { id: 'TRX003', date: '2024-12-19 14:22', employee: 'Mike Johnson', type: 'bonus', amount: 1500, status: 'completed', description: 'Performance Bonus' },
-    { id: 'TRX004', date: '2024-12-19 11:45', employee: 'Sarah Williams', type: 'deduction', amount: -450, status: 'completed', description: 'Insurance Deduction' },
-    { id: 'TRX005', date: '2024-12-18 16:30', employee: 'Tom Brown', type: 'reimbursement', amount: 320, status: 'processing', description: 'Travel Reimbursement' },
-    { id: 'TRX006', date: '2024-12-18 09:00', employee: 'Emily Davis', type: 'salary', amount: 4800, status: 'completed', description: 'Monthly Salary' },
-    { id: 'TRX007', date: '2024-12-17 13:15', employee: 'Robert Wilson', type: 'advance', amount: 1000, status: 'completed', description: 'Salary Advance' },
-    { id: 'TRX008', date: '2024-12-17 10:30', employee: 'Lisa Anderson', type: 'overtime', amount: 650, status: 'completed', description: 'Overtime Payment' },
+  const transactionTypes = ['credit', 'debit', 'loanRepayment', 'loanCredit'];
+  const transactionCategories = [
+    'transfer', 'deposit', 'withdrawal', 'payment', 'refund', 
+    'fee', 'bonus', 'other', 'salary', 'loanPayment', 'loanCredit'
   ];
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [page, rowsPerPage, filterType, filterCategory, filterStatus]);
+
+  const fetchTransactions = async () => {
+    setLoading(true);
+    try {
+      const filters = {};
+      if (filterType !== 'all') filters.type = filterType;
+      if (filterCategory !== 'all') filters.category = filterCategory;
+      if (filterStatus !== 'all') filters.status = filterStatus;
+
+      const result = await transactionService.getTransactions(page, rowsPerPage, filters);
+      if (result.success) {
+        setTransactions(result.transactions);
+        setTotalTransactions(result.pagination?.totalTransactions || 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangePage = (_, newPage) => {
+    setPage(newPage + 1);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(1);
+  };
+
+  const handleRefresh = () => {
+    fetchTransactions();
+  };
 
   const getTypeColor = (type) => {
     switch (type) {
+      case 'credit': return '#42956c';
+      case 'debit': return '#f44336';
+      case 'loanRepayment': return '#ff9800';
+      case 'loanCredit': return '#2196f3';
+      default: return '#757575';
+    }
+  };
+
+  const getCategoryColor = (category) => {
+    switch (category) {
       case 'salary': return '#42956c';
-      case 'loan': return '#ff9800';
-      case 'bonus': return '#2196f3';
-      case 'deduction': return '#f44336';
-      case 'reimbursement': return '#9c27b0';
-      case 'advance': return '#ff5722';
-      case 'overtime': return '#00bcd4';
+      case 'loanPayment': return '#ff9800';
+      case 'loanCredit': return '#2196f3';
+      case 'transfer': return '#9c27b0';
+      case 'deposit': return '#00bcd4';
+      case 'withdrawal': return '#f44336';
+      case 'payment': return '#ff5722';
+      case 'refund': return '#4caf50';
+      case 'fee': return '#795548';
+      case 'bonus': return '#673ab7';
+      case 'other': return '#757575';
       default: return '#757575';
     }
   };
@@ -65,14 +120,30 @@ const Transactions = () => {
     }
   };
 
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES'
+    }).format(amount);
+  };
+
   const filteredTransactions = transactions.filter(transaction => {
-    const matchesSearch = transaction.employee.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         transaction.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         transaction.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = filterType === 'all' || transaction.type === filterType;
-    const matchesStatus = filterStatus === 'all' || transaction.status === filterStatus;
-    
-    return matchesSearch && matchesType && matchesStatus;
+    const fullName = `${transaction.firstName || ''} ${transaction.lastName || ''}`.toLowerCase();
+    const searchLower = searchQuery.toLowerCase();
+    return fullName.includes(searchLower) ||
+           (transaction.email || '').toLowerCase().includes(searchLower) ||
+           (transaction.transactionId || '').toLowerCase().includes(searchLower) ||
+           (transaction.reference || '').toLowerCase().includes(searchLower);
   });
 
   return (
@@ -86,29 +157,29 @@ const Transactions = () => {
             View all financial transactions
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<Download />}
-          sx={{ borderColor: '#42956c', color: '#42956c' }}
-        >
-          Export
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <IconButton onClick={handleRefresh} sx={{ color: '#42956c' }}>
+            <Refresh />
+          </IconButton>
+        </Box>
       </Box>
 
       <Paper sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
           <TextField
-            placeholder="Search transactions..."
+            placeholder="Search by name, email, transaction ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             size="small"
             sx={{ flex: 1, minWidth: 250 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search />
+                  </InputAdornment>
+                ),
+              }
             }}
           />
           <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -119,13 +190,25 @@ const Transactions = () => {
               startAdornment={<FilterList sx={{ mr: 1, fontSize: 20, color: 'action.active' }} />}
             >
               <MenuItem value="all">All Types</MenuItem>
-              <MenuItem value="salary">Salary</MenuItem>
-              <MenuItem value="loan">Loan</MenuItem>
-              <MenuItem value="bonus">Bonus</MenuItem>
-              <MenuItem value="deduction">Deduction</MenuItem>
-              <MenuItem value="reimbursement">Reimbursement</MenuItem>
-              <MenuItem value="advance">Advance</MenuItem>
-              <MenuItem value="overtime">Overtime</MenuItem>
+              {transactionTypes.map(type => (
+                <MenuItem key={type} value={type}>
+                  {type.replace(/([A-Z])/g, ' $1').trim()}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <Select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              displayEmpty
+            >
+              <MenuItem value="all">All Categories</MenuItem>
+              {transactionCategories.map(category => (
+                <MenuItem key={category} value={category}>
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -149,72 +232,128 @@ const Transactions = () => {
               <TableRow>
                 <TableCell>Transaction ID</TableCell>
                 <TableCell>Date & Time</TableCell>
-                <TableCell>Employee</TableCell>
+                <TableCell>User</TableCell>
                 <TableCell>Type</TableCell>
-                <TableCell>Description</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell>Reference</TableCell>
                 <TableCell align="right">Amount</TableCell>
                 <TableCell>Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredTransactions.map((transaction) => (
-                <TableRow key={transaction.id} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>
-                      {transaction.id}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{transaction.date}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: '#42956c' }}>
-                        {transaction.employee.split(' ').map(n => n[0]).join('')}
-                      </Avatar>
-                      <Typography variant="body2">{transaction.employee}</Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={transaction.type}
-                      size="small"
-                      sx={{
-                        backgroundColor: `${getTypeColor(transaction.type)}20`,
-                        color: getTypeColor(transaction.type),
-                        fontWeight: 500
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>{transaction.description}</TableCell>
-                  <TableCell align="right">
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                      {transaction.amount > 0 ? (
-                        <ArrowUpward sx={{ fontSize: 16, color: '#42956c' }} />
-                      ) : (
-                        <ArrowDownward sx={{ fontSize: 16, color: '#f44336' }} />
-                      )}
-                      <Typography 
-                        variant="body2" 
-                        fontWeight="bold"
-                        sx={{ 
-                          color: transaction.amount > 0 ? '#42956c' : '#f44336'
-                        }}
-                      >
-                        ${Math.abs(transaction.amount).toLocaleString()}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={transaction.status}
-                      size="small"
-                      color={getStatusColor(transaction.status)}
-                    />
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                    <CircularProgress />
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : filteredTransactions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                    <Typography variant="body1" color="text.secondary">
+                      No transactions found
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredTransactions.map((transaction) => (
+                  <TableRow key={transaction._id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={500}>
+                        {transaction.transactionId}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {formatDate(transaction.createdAt)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: '#42956c' }}>
+                          {transaction.firstName && transaction.lastName
+                            ? `${transaction.firstName[0]}${transaction.lastName[0]}`.toUpperCase()
+                            : 'U'
+                          }
+                        </Avatar>
+                        <Box>
+                          <Typography variant="body2">
+                            {`${transaction.firstName || ''} ${transaction.lastName || ''}`}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {transaction.email}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={transaction.type?.replace(/([A-Z])/g, ' $1').trim() || 'N/A'}
+                        size="small"
+                        sx={{
+                          backgroundColor: `${getTypeColor(transaction.type)}20`,
+                          color: getTypeColor(transaction.type),
+                          fontWeight: 500
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={transaction.category?.charAt(0).toUpperCase() + transaction.category?.slice(1) || 'N/A'}
+                        size="small"
+                        sx={{
+                          backgroundColor: `${getCategoryColor(transaction.category)}20`,
+                          color: getCategoryColor(transaction.category),
+                          fontWeight: 500
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                        {transaction.reference}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+                        {transaction.type === 'credit' || transaction.type === 'loanCredit' ? (
+                          <ArrowUpward sx={{ fontSize: 16, color: '#42956c' }} />
+                        ) : (
+                          <ArrowDownward sx={{ fontSize: 16, color: '#f44336' }} />
+                        )}
+                        <Typography 
+                          variant="body2" 
+                          fontWeight="bold"
+                          sx={{ 
+                            color: transaction.type === 'credit' || transaction.type === 'loanCredit' ? '#42956c' : '#f44336'
+                          }}
+                        >
+                          {formatCurrency(transaction.amount)}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={transaction.status}
+                        size="small"
+                        color={getStatusColor(transaction.status)}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
+
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25]}
+          component="div"
+          count={totalTransactions}
+          rowsPerPage={rowsPerPage}
+          page={page - 1}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
       </Paper>
     </Box>
   );

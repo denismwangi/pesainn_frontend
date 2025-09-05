@@ -7,8 +7,11 @@ import UpdatePassword from './components/auth/UpdatePassword';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import DashboardHome from './components/dashboard/DashboardHome';
 import Employees from './components/dashboard/Employees';
+import EmployeeDetails from './components/dashboard/EmployeeDetails';
 import Payroll from './components/dashboard/Payroll';
 import Loans from './components/dashboard/Loans';
+import LoanRequest from './components/dashboard/LoanRequest';
+import LoanDetails from './components/dashboard/LoanDetails';
 import Transactions from './components/dashboard/Transactions';
 import Settings from './components/dashboard/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -124,6 +127,33 @@ function App() {
             <Route path="loans" element={<Loans />} />
             <Route path="transactions" element={<Transactions />} />
             <Route path="settings" element={<Settings />} />
+          </Route>
+          
+          {/* Loan Request route - Protected */}
+          <Route path="/loan-request" element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<LoanRequest />} />
+          </Route>
+          
+          {/* Loan Details route - Protected */}
+          <Route path="/loans/:id" element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<LoanDetails />} />
+          </Route>
+          
+          {/* Employee details route - Protected */}
+          <Route path="/employees/:id" element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<EmployeeDetails />} />
           </Route>
           
           {/* Catch all route - redirect to login */}
