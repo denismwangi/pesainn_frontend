@@ -358,275 +358,171 @@ const EmployeeDetails = () => {
       </Box>
 
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
-        {/* Employee Profile Card - 30% width */}
-        <Box sx={{ flex: '0 0 30%', minWidth: 0 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ textAlign: 'center', py: 4 }}>
-              <Avatar
-                sx={{
-                  width: 100,
-                  height: 100,
-                  margin: '0 auto',
-                  mb: 2,
-                  bgcolor: '#42956c',
-                  fontSize: '2rem'
-                }}
-                src={employee.profilePicture}
-              >
-                {!employee.profilePicture && employee.firstName && employee.lastName
-                  ? `${employee.firstName[0]}${employee.lastName[0]}`.toUpperCase()
-                  : <Person />
+  {/* Employee Profile Card - 30% width */}
+  <Box sx={{ flex: '0 0 30%', minWidth: 0 }}>
+    <Card sx={{ height: '100%' }}>
+      <CardContent sx={{ textAlign: 'center', py: 4 }}>
+        <Avatar
+          sx={{
+            width: 100,
+            height: 100,
+            margin: '0 auto',
+            mb: 2,
+            bgcolor: '#42956c',
+            fontSize: '2rem'
+          }}
+          src={employee.profilePicture}
+        >
+          {!employee.profilePicture && employee.firstName && employee.lastName
+            ? `${employee.firstName[0]}${employee.lastName[0]}`.toUpperCase()
+            : <Person />}
+        </Avatar>
+        <Typography variant="h5" fontWeight="bold" gutterBottom>
+          {employee.fullName || `${employee.firstName} ${employee.lastName}`}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" gutterBottom>
+          ID: {employee.id}
+        </Typography>
+        <Box sx={{ mt: 2, mb: 3 }}>
+          <Chip
+            label={employee.userState === 'Pending_Approval' ? 'Pending Approval' : (employee.userState || 'Pending Approval')}
+            color={getStatusColor(employee.userState)}
+            size="medium"
+          />
+        </Box>
+
+        <Divider sx={{ my: 2 }} />
+
+        <List sx={{ textAlign: 'left' }}>
+          <ListItem>
+            <ListItemIcon>
+              <Email color="action" />
+            </ListItemIcon>
+            <ListItemText
+              primary="Email"
+              secondary={employee.email}
+              secondaryTypographyProps={{
+                sx: {
+                  wordBreak: 'break-all',
+                  fontSize: '0.875rem'
                 }
-              </Avatar>
-              <Typography variant="h5" fontWeight="bold" gutterBottom>
-                {employee.fullName || `${employee.firstName} ${employee.lastName}`}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                ID: {employee.id}
-              </Typography>
-              <Box sx={{ mt: 2, mb: 3 }}>
-                <Chip
-                  label={employee.userState === 'Pending_Approval' ? 'Pending Approval' : (employee.userState || 'Pending Approval')}
-                  color={getStatusColor(employee.userState)}
-                  size="medium"
-                />
+              }}
+            />
+          </ListItem>
+          <ListItem>
+            <ListItemIcon>
+              <Phone color="action" />
+            </ListItemIcon>
+            <ListItemText primary="Phone" secondary={employee.phone} />
+          </ListItem>
+          <ListItem>
+            <ListItemIcon>
+              <Business color="action" />
+            </ListItemIcon>
+            <ListItemText primary="Business" secondary={employee.businessName} />
+          </ListItem>
+        </List>
+      </CardContent>
+    </Card>
+  </Box>
+
+  {/* Wallet & Financial Information with Quick Actions - 70% width */}
+  <Box sx={{ flex: '1 1 70%', minWidth: 0 }}>
+    <Card sx={{ height: '100%' }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="h6" fontWeight="bold">
+            Wallet & Financial Information
+          </Typography>
+          {employee.wallet && (
+            <Chip
+              icon={employee.wallet.isLocked ? <Lock /> : <CheckCircle />}
+              label={employee.wallet.isLocked ? 'Locked' : 'Active'}
+              color={employee.wallet.isLocked ? 'error' : 'success'}
+              size="small"
+            />
+          )}
+        </Box>
+        <Divider sx={{ mb: 2 }} />
+
+        {/* First Row */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          {employee.wallet && (
+            <>
+              <Box sx={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center' }}>
+                <AccountBalanceWallet sx={{ mr: 1, color: '#42956c' }} />
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Total Balance</Typography>
+                  <Typography variant="h6" fontWeight="bold" color="primary">
+                    {formatCurrency(employee.wallet.balance || 0)}
+                  </Typography>
+                </Box>
               </Box>
-              
-              <Divider sx={{ my: 2 }} />
-              
-              <List sx={{ textAlign: 'left' }}>
-                <ListItem>
-                  <ListItemIcon>
-                    <Email color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Email"
-                    secondary={employee.email}
-                    secondaryTypographyProps={{ 
-                      sx: { 
-                        wordBreak: 'break-all',
-                        fontSize: '0.875rem'
-                      } 
-                    }}
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <Phone color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Phone"
-                    secondary={employee.phone}
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemIcon>
-                    <Business color="action" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Business"
-                    secondary={employee.businessName}
-                  />
-                </ListItem>
-              </List>
-            </CardContent>
-          </Card>
+
+              <Box sx={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center' }}>
+                <CheckCircle sx={{ mr: 1, color: 'success.main' }} />
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Available Balance</Typography>
+                  <Typography variant="h6" fontWeight="bold" color="success.main">
+                    {formatCurrency(employee.wallet.availableBalance || 0)}
+                  </Typography>
+                </Box>
+              </Box>
+            </>
+          )}
+
+          <Box sx={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center' }}>
+            <AccountBalance sx={{ mr: 1, color: '#42956c' }} />
+            <Box>
+              <Typography variant="body2" color="text.secondary">Basic Salary</Typography>
+              <Typography variant="h6" fontWeight="bold">
+                {formatCurrency(employee.basicSalary || 0)}
+              </Typography>
+            </Box>
+          </Box>
         </Box>
 
-        {/* Wallet & Financial Information with Quick Actions - 70% width */}
-        <Box sx={{ flex: '1 1 70%', minWidth: 0 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="h6" fontWeight="bold">
-                  Wallet & Financial Information
-                </Typography>
-                {employee.wallet && (
-                  <Chip
-                    icon={employee.wallet.isLocked ? <Lock /> : <CheckCircle />}
-                    label={employee.wallet.isLocked ? 'Locked' : 'Active'}
-                    color={employee.wallet.isLocked ? 'error' : 'success'}
-                    size="small"
-                  />
-                )}
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              
-              <Grid container spacing={3}>
-                {/* Financial Information Section */}
-                <Grid item xs={12} md={8}>
-                  <Grid container spacing={2}>
-                    {employee.wallet && (
-                      <>
-                        <Grid item xs={12} sm={6}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <AccountBalanceWallet sx={{ mr: 1, color: '#42956c' }} />
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                Total Balance
-                              </Typography>
-                              <Typography variant="h6" fontWeight="bold" color="primary">
-                                {formatCurrency(employee.wallet.balance || 0)}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Grid>
-                        
-                        <Grid item xs={12} sm={6}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                            <CheckCircle sx={{ mr: 1, color: 'success.main' }} />
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                Available Balance
-                              </Typography>
-                              <Typography variant="h6" fontWeight="bold" color="success.main">
-                                {formatCurrency(employee.wallet.availableBalance || 0)}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Grid>
-                      </>
-                    )}
-                    
-                    <Grid item xs={12} sm={6}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <AccountBalance sx={{ mr: 1, color: '#42956c' }} />
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Basic Salary
-                          </Typography>
-                          <Typography variant="h6" fontWeight="bold">
-                            {formatCurrency(employee.basicSalary || 0)}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <CreditCard sx={{ mr: 1, color: '#f44336' }} />
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Total Loans
-                          </Typography>
-                          <Typography variant="h6" fontWeight="bold" color="error">
-                            {formatCurrency(employee.totalLoans || 0)}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </Grid>
-                    
-                    {/* Wallet Limits */}
-                    {employee.wallet && (
-                      <>
-                        <Grid item xs={12} sm={6}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <TrendingUp sx={{ mr: 1, color: '#757575' }} />
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                Daily Limit
-                              </Typography>
-                              <Typography variant="h6" fontWeight="medium">
-                                {formatCurrency(employee.wallet.dailyLimit || 0)}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Grid>
-                        
-                        <Grid item xs={12} sm={6}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <DateRange sx={{ mr: 1, color: '#757575' }} />
-                            <Box>
-                              <Typography variant="body2" color="text.secondary">
-                                Monthly Limit
-                              </Typography>
-                              <Typography variant="h6" fontWeight="medium">
-                                {formatCurrency(employee.wallet.monthlyLimit || 0)}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Grid>
-                      </>
-                    )}
-                  </Grid>
-                </Grid>
-                
-                {/* Quick Actions Section */}
-                <Grid item xs={12} md={4}>
-                  <Box>
-                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mb: 2 }}>
-                      Quick Actions
-                    </Typography>
-                    <Grid container spacing={1}>
-                      <Grid item xs={12}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          size="small"
-                          startIcon={<TrendingUp />}
-                          sx={{ 
-                            borderColor: '#42956c', 
-                            color: '#42956c',
-                            justifyContent: 'flex-start'
-                          }}
-                        >
-                          View Payroll
-                        </Button>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          size="small"
-                          startIcon={<CreditCard />}
-                          sx={{ 
-                            borderColor: '#42956c', 
-                            color: '#42956c',
-                            justifyContent: 'flex-start'
-                          }}
-                        >
-                          View Loans
-                        </Button>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          size="small"
-                          startIcon={<AccountBalanceWallet />}
-                          sx={{ 
-                            borderColor: '#42956c', 
-                            color: '#42956c',
-                            justifyContent: 'flex-start'
-                          }}
-                        >
-                          Transactions
-                        </Button>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <Button
-                          fullWidth
-                          variant="outlined"
-                          size="small"
-                          startIcon={<DateRange />}
-                          sx={{ 
-                            borderColor: '#42956c', 
-                            color: '#42956c',
-                            justifyContent: 'flex-start'
-                          }}
-                        >
-                          Leave History
-                        </Button>
-                      </Grid>
-                    </Grid>
-                  </Box>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Box>
+        {/* Second Row - Total Loans, Daily Limit, Monthly Limit */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mt: 3 }}>
+          <Box sx={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center' }}>
+            <CreditCard sx={{ mr: 1, color: '#f44336' }} />
+            <Box>
+              <Typography variant="body2" color="text.secondary">Total Loans</Typography>
+              <Typography variant="h6" fontWeight="bold" color="error">
+                {formatCurrency(employee.totalLoans || 0)}
+              </Typography>
+            </Box>
+          </Box>
 
-      </Box>
+          {employee.wallet && (
+            <>
+              <Box sx={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center' }}>
+                <TrendingUp sx={{ mr: 1, color: '#757575' }} />
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Daily Limit</Typography>
+                  <Typography variant="h6" fontWeight="medium">
+                    {formatCurrency(employee.wallet.dailyLimit || 0)}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center' }}>
+                <DateRange sx={{ mr: 1, color: '#757575' }} />
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Monthly Limit</Typography>
+                  <Typography variant="h6" fontWeight="medium">
+                    {formatCurrency(employee.wallet.monthlyLimit || 0)}
+                  </Typography>
+                </Box>
+              </Box>
+            </>
+          )}
+        </Box>
+      </CardContent>
+    </Card>
+  </Box>
+</Box>
+
       
       {/* Edit Profile Modal */}
       <Dialog open={openEditModal} onClose={handleCloseEditModal} maxWidth="sm" fullWidth>

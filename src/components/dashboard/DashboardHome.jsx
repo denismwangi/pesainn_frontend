@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Grid, 
   Paper, 
@@ -13,7 +15,14 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
-  ListItemSecondaryAction
+  ListItemSecondaryAction,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import {
   People,
@@ -27,45 +36,250 @@ import {
   CheckCircle
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { API_ENDPOINTS } from '../../config/api';
+import { TokenManager } from '../../utils/storage';
 
 const DashboardHome = () => {
-  // Sample data
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [payrollLoading, setPayrollLoading] = useState(true);
+  const [revenueLoading, setRevenueLoading] = useState(true);
+  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [statistics, setStatistics] = useState({
+    totalEmployees: 0,
+    totalPayrollAmount: 0,
+    activeLoanAmount: 0,
+    totalInterest: 0
+  });
+  const [salaryStatistics, setSalaryStatistics] = useState([]);
+  const [revenueStatistics, setRevenueStatistics] = useState([]);
+  const [recentTransactions, setRecentTransactions] = useState([]);
+
+  useEffect(() => {
+    fetchDashboardStatistics();
+    fetchSalaryStatistics();
+    fetchRevenueStatistics();
+    fetchRecentTransactions();
+  }, []);
+
+  const fetchDashboardStatistics = async () => {
+    setLoading(true);
+    try {
+      const token = TokenManager.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(API_ENDPOINTS.DASHBOARD_STATISTICS, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setStatistics({
+          totalEmployees: data.data.totalEmployees || 0,
+          totalPayrollAmount: data.data.totalPayrollAmount || 0,
+          activeLoanAmount: data.data.activeLoanAmount || 0,
+          totalInterest: data.data.totalInterest || 0
+        });
+      } else {
+        console.error('Failed to fetch dashboard statistics:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard statistics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSalaryStatistics = async () => {
+    setPayrollLoading(true);
+    try {
+      const token = TokenManager.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(API_ENDPOINTS.SALARY_STATISTICS, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Transform the data for the chart
+        const chartData = data.data.monthlyStatistics.map(stat => ({
+          month: stat.monthName.substring(0, 3), // Get first 3 letters (Jan, Feb, etc.)
+          amount: stat.totalAmount,
+          transactionCount: stat.transactionCount,
+          avgAmount: stat.avgAmount
+        }));
+        
+        // Sort by year and month to ensure proper order
+        chartData.sort((a, b) => {
+          const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month);
+        });
+
+        setSalaryStatistics(chartData);
+      } else {
+        console.error('Failed to fetch salary statistics:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching salary statistics:', error);
+    } finally {
+      setPayrollLoading(false);
+    }
+  };
+
+  const fetchRevenueStatistics = async () => {
+    setRevenueLoading(true);
+    try {
+      const token = TokenManager.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(API_ENDPOINTS.REVENUE_STATISTICS, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log('Revenue statistics received:', data.data);
+        
+        // Transform the data for the pie chart
+        const chartData = [
+          { 
+            name: 'Total Paid Payroll', 
+            value: data.data.totalPaidPayroll || 0, 
+            color: '#42956c' 
+          },
+          { 
+            name: 'Total Loans', 
+            value: data.data.totalLoans || 0, 
+            color: '#2196f3' 
+          },
+          { 
+            name: 'Total Interest', 
+            value: data.data.totalInterest || 0, 
+            color: '#ff9800' 
+          }
+        ].filter(item => item.value > 0); // Filter out zero values
+
+        console.log('Chart data:', chartData);
+        setRevenueStatistics(chartData);
+      } else {
+        console.error('Failed to fetch revenue statistics:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching revenue statistics:', error);
+    } finally {
+      setRevenueLoading(false);
+    }
+  };
+
+  const fetchRecentTransactions = async () => {
+    setTransactionsLoading(true);
+    try {
+      const token = TokenManager.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${API_ENDPOINTS.RECENT_TRANSACTIONS}?page=1&limit=5`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log('Recent transactions received:', data.data);
+        setRecentTransactions(data.data.transactions || []);
+      } else {
+        console.error('Failed to fetch recent transactions:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching recent transactions:', error);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES'
+    }).format(amount);
+  };
+
+  const formatTimeAgo = (dateString) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`;
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return { bg: '#e8f5e9', color: '#42956c' };
+      case 'pending': return { bg: '#fff3e0', color: '#ff9800' };
+      case 'failed': return { bg: '#ffebee', color: '#f44336' };
+      case 'processing': return { bg: '#e3f2fd', color: '#2196f3' };
+      default: return { bg: '#f5f5f5', color: '#757575' };
+    }
+  };
+
   const stats = [
-    { title: 'Total Employees', value: '248', icon: <People />, color: '#42956c', change: '+12%' },
-    { title: 'Total Payroll', value: '$125,430', icon: <AccountBalance />, color: '#2196f3', change: '+8%' },
-    { title: 'Active Loans', value: '45', icon: <AttachMoney />, color: '#ff9800', change: '-3%' },
-    { title: 'Revenue', value: '$89,200', icon: <TrendingUp />, color: '#9c27b0', change: '+23%' },
-  ];
-
-  const payrollData = [
-    { month: 'Jan', amount: 85000 },
-    { month: 'Feb', amount: 92000 },
-    { month: 'Mar', amount: 88000 },
-    { month: 'Apr', amount: 95000 },
-    { month: 'May', amount: 98000 },
-    { month: 'Jun', amount: 105000 },
-  ];
-
-  const departmentData = [
-    { name: 'Engineering', value: 85, color: '#42956c' },
-    { name: 'Sales', value: 65, color: '#2196f3' },
-    { name: 'Marketing', value: 45, color: '#ff9800' },
-    { name: 'HR', value: 25, color: '#9c27b0' },
-    { name: 'Finance', value: 28, color: '#f44336' },
-  ];
-
-  const recentTransactions = [
-    { id: 1, name: 'John Doe', type: 'Salary', amount: 5200, status: 'completed', time: '2 hours ago' },
-    { id: 2, name: 'Jane Smith', type: 'Loan', amount: 3000, status: 'pending', time: '3 hours ago' },
-    { id: 3, name: 'Mike Johnson', type: 'Bonus', amount: 1500, status: 'completed', time: '5 hours ago' },
-    { id: 4, name: 'Sarah Williams', type: 'Salary', amount: 4800, status: 'completed', time: '1 day ago' },
-    { id: 5, name: 'Tom Brown', type: 'Reimbursement', amount: 450, status: 'pending', time: '2 days ago' },
-  ];
-
-  const upcomingPayroll = [
-    { department: 'Engineering', date: 'Dec 25, 2024', amount: 45000, employees: 30 },
-    { department: 'Sales', date: 'Dec 25, 2024', amount: 32000, employees: 20 },
-    { department: 'Marketing', date: 'Dec 25, 2024', amount: 18000, employees: 12 },
+    { 
+      title: 'Total Employees', 
+      value: loading ? '...' : statistics.totalEmployees.toString(), 
+      icon: <People />, 
+      color: '#42956c',  
+    },
+    { 
+      title: 'Total Payroll', 
+      value: loading ? '...' : formatCurrency(statistics.totalPayrollAmount), 
+      icon: <AccountBalance />, 
+      color: '#2196f3', 
+       
+    },
+    { 
+      title: 'Active Loans', 
+      value: loading ? '...' : formatCurrency(statistics.activeLoanAmount), 
+      icon: <AttachMoney />, 
+      color: '#ff9800', 
+       
+    },
+    { 
+      title: 'Total Interest', 
+      value: loading ? '...' : formatCurrency(statistics.totalInterest), 
+      icon: <TrendingUp />, 
+      color: '#9c27b0', 
+      
+    },
   ];
 
   return (
@@ -78,236 +292,252 @@ const DashboardHome = () => {
       </Typography>
 
       {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Box sx={{ display: 'flex', gap: 3, mb: 3, width: '100%' }}>
         {stats.map((stat, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <Avatar sx={{ bgcolor: `${stat.color}20`, color: stat.color, mr: 2 }}>
-                    {stat.icon}
-                  </Avatar>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography color="text.secondary" variant="body2">
-                      {stat.title}
-                    </Typography>
-                    <Typography variant="h5" fontWeight="bold">
-                      {stat.value}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {stat.change.startsWith('+') ? (
-                    <ArrowUpward sx={{ fontSize: 16, color: '#42956c' }} />
-                  ) : (
-                    <ArrowDownward sx={{ fontSize: 16, color: '#f44336' }} />
-                  )}
-                  <Typography
-                    variant="body2"
-                    sx={{ 
-                      color: stat.change.startsWith('+') ? '#42956c' : '#f44336',
-                      fontWeight: 600
-                    }}
-                  >
-                    {stat.change}
+          <Card key={index} sx={{ flex: 1, height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Avatar sx={{ bgcolor: `${stat.color}20`, color: stat.color, mr: 2 }}>
+                  {loading ? <CircularProgress size={20} sx={{ color: stat.color }} /> : stat.icon}
+                </Avatar>
+                <Box sx={{ flex: 1 }}>
+                  <Typography color="text.secondary" variant="body2">
+                    {stat.title}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    from last month
+                  <Typography variant="h5" fontWeight="bold">
+                    {stat.value}
                   </Typography>
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+              </Box>
+             
+            </CardContent>
+          </Card>
         ))}
-      </Grid>
+      </Box>
 
       {/* Charts Row */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6" fontWeight="bold">
-                Payroll Trends
-              </Typography>
-              <IconButton size="small">
-                <MoreVert />
-              </IconButton>
-            </Box>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={payrollData}>
+      <Box sx={{ display: 'flex', gap: 3, mb: 3, width: '100%' }}>
+        <Paper sx={{ p: 3, flex: '0 0 70%' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h6" fontWeight="bold">
+              Payroll Trends
+            </Typography>
+            <IconButton size="small">
+              <MoreVert />
+            </IconButton>
+          </Box>
+          <ResponsiveContainer width="100%" height={300}>
+            {payrollLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <BarChart data={salaryStatistics}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip 
+                  formatter={(value, name) => {
+                    if (name === 'amount') {
+                      return [formatCurrency(value), 'Total Amount'];
+                    }
+                    return [value, name];
+                  }}
+                  labelFormatter={(label) => `Month: ${label}`}
+                />
                 <Bar dataKey="amount" fill="#42956c" radius={[8, 8, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </Paper>
-        </Grid>
+            )}
+          </ResponsiveContainer>
+        </Paper>
 
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6" fontWeight="bold">
-                Employees by Department
-              </Typography>
-              <IconButton size="small">
-                <MoreVert />
-              </IconButton>
-            </Box>
-            <ResponsiveContainer width="100%" height={250}>
+        <Paper sx={{ p: 3, flex: '0 0 30%', display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h6" fontWeight="bold">
+              Revenue Statistics
+            </Typography>
+            <IconButton size="small">
+              <MoreVert />
+            </IconButton>
+          </Box>
+          <ResponsiveContainer width="100%" height={250}>
+            {revenueLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <CircularProgress />
+              </Box>
+            ) : (
               <PieChart>
                 <Pie
-                  data={departmentData}
+                  data={revenueStatistics}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
                   outerRadius={90}
-                  paddingAngle={5}
+                  paddingAngle={2}
                   dataKey="value"
+                  minAngle={15}
                 >
-                  {departmentData.map((entry, index) => (
+                  {revenueStatistics.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip 
+                  formatter={(value, name) => [formatCurrency(value), name]}
+                />
               </PieChart>
-            </ResponsiveContainer>
-            <Box sx={{ mt: 2 }}>
-              {departmentData.map((dept, index) => (
-                <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Box
-                    sx={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: '50%',
-                      backgroundColor: dept.color,
-                      mr: 1
-                    }}
-                  />
-                  <Typography variant="body2" sx={{ flex: 1 }}>
-                    {dept.name}
-                  </Typography>
-                  <Typography variant="body2" fontWeight="bold">
-                    {dept.value}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Recent Transactions and Upcoming Payroll */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" fontWeight="bold">
-                Recent Transactions
-              </Typography>
-              <Typography variant="body2" color="primary" sx={{ cursor: 'pointer' }}>
-                View All
-              </Typography>
-            </Box>
-            <List>
-              {recentTransactions.map((transaction) => (
-                <ListItem key={transaction.id} sx={{ px: 0 }}>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: '#42956c' }}>
-                      {transaction.name.split(' ').map(n => n[0]).join('')}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={transaction.name}
-                    secondary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="caption">{transaction.type}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          • {transaction.time}
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                  <ListItemSecondaryAction>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2" fontWeight="bold">
-                        ${transaction.amount.toLocaleString()}
-                      </Typography>
-                      <Chip
-                        label={transaction.status}
-                        size="small"
-                        sx={{
-                          mt: 0.5,
-                          backgroundColor: transaction.status === 'completed' ? '#e8f5e9' : '#fff3e0',
-                          color: transaction.status === 'completed' ? '#42956c' : '#ff9800',
-                          fontSize: '0.75rem'
-                        }}
-                      />
-                    </Box>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" fontWeight="bold">
-                Upcoming Payroll
-              </Typography>
-              <Typography variant="body2" color="primary" sx={{ cursor: 'pointer' }}>
-                Schedule All
-              </Typography>
-            </Box>
-            {upcomingPayroll.map((payroll, index) => (
-              <Card key={index} sx={{ mb: 2, bgcolor: '#f5f5f5' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body1" fontWeight="bold">
-                      {payroll.department}
-                    </Typography>
-                    <Typography variant="h6" color="primary" fontWeight="bold">
-                      ${payroll.amount.toLocaleString()}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <Schedule sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {payroll.date}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <People sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {payroll.employees} employees
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={75} 
-                    sx={{ 
-                      height: 6, 
-                      borderRadius: 3,
-                      backgroundColor: '#e0e0e0',
-                      '& .MuiLinearProgress-bar': {
-                        backgroundColor: '#42956c',
-                      }
-                    }}
-                  />
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    75% prepared
-                  </Typography>
-                </CardContent>
-              </Card>
+            )}
+          </ResponsiveContainer>
+          <Box sx={{ mt: 2 }}>
+            {revenueStatistics.map((stat, index) => (
+              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    backgroundColor: stat.color,
+                    mr: 1
+                  }}
+                />
+                <Typography variant="body2" sx={{ flex: 1 }}>
+                  {stat.name}
+                </Typography>
+                <Typography variant="body2" fontWeight="bold">
+                  {formatCurrency(stat.value)}
+                </Typography>
+              </Box>
             ))}
-          </Paper>
-        </Grid>
-      </Grid>
+          </Box>
+        </Paper>
+      </Box>
+
+      {/* Recent Transactions */}
+      <Paper sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" fontWeight="bold">
+            Recent Transactions
+          </Typography>
+          <Typography 
+            variant="body2" 
+            color="primary" 
+            sx={{ cursor: 'pointer' }}
+            onClick={() => navigate('/dashboard/transactions')}
+          >
+            View All
+          </Typography>
+        </Box>
+        {transactionsLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 5 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>User</TableCell>
+                  <TableCell>Contact</TableCell>
+                  <TableCell>Transaction ID</TableCell>
+                  <TableCell>Reference</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell align="right">Amount</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Date & Time</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {recentTransactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No recent transactions found
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  recentTransactions.map((transaction) => {
+                    const statusColors = getStatusColor(transaction.status);
+                    return (
+                      <TableRow key={transaction._id} hover>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Avatar sx={{ bgcolor: '#42956c', width: 32, height: 32 }}>
+                              {transaction.firstName && transaction.lastName 
+                                ? `${transaction.firstName[0]}${transaction.lastName[0]}`.toUpperCase()
+                                : 'U'
+                              }
+                            </Avatar>
+                            <Box>
+                              <Typography variant="body2" fontWeight="500">
+                                {`${transaction.firstName || ''} ${transaction.lastName || ''}`.trim() || 'Unknown User'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {transaction.email}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {transaction.phone || 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                            {transaction.transactionId}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {transaction.reference}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {transaction.category}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(transaction.amount)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={transaction.status.toUpperCase()}
+                            size="small"
+                            sx={{
+                              backgroundColor: statusColors.bg,
+                              color: statusColors.color,
+                              fontSize: '0.65rem',
+                              fontWeight: 'bold',
+                              height: 24
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {new Date(transaction.createdAt).toLocaleDateString('en-KE', {
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(transaction.createdAt).toLocaleTimeString('en-KE', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
     </Box>
   );
 };

@@ -19,14 +19,23 @@ import {
   Avatar,
   CircularProgress,
   TablePagination,
-  IconButton
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Alert,
+  Snackbar
 } from '@mui/material';
 import {
   Search,
   FilterList,
   ArrowUpward,
   ArrowDownward,
-  Refresh
+  Refresh,
+  Cancel,
+  Close
 } from '@mui/icons-material';
 
 const Transactions = () => {
@@ -39,6 +48,9 @@ const Transactions = () => {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalTransactions, setTotalTransactions] = useState(0);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, transaction: null, action: null });
+  const [processing, setProcessing] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const transactionTypes = ['credit', 'debit', 'loanRepayment', 'loanCredit'];
   const transactionCategories = [
@@ -81,6 +93,51 @@ const Transactions = () => {
 
   const handleRefresh = () => {
     fetchTransactions();
+  };
+
+  const handleOpenConfirmDialog = (transaction, action) => {
+    setConfirmDialog({ open: true, transaction, action });
+  };
+
+  const handleCloseConfirmDialog = () => {
+    setConfirmDialog({ open: false, transaction: null, action: null });
+  };
+
+  const handleConfirmAction = async () => {
+    const { transaction, action } = confirmDialog;
+    if (!transaction || !action) return;
+
+    setProcessing(true);
+    try {
+      // Here you would call the actual API to perform the action
+      // For example: await transactionService.revertTransaction(transaction._id);
+      
+      // Simulating API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      setSnackbar({
+        open: true,
+        message: `Transaction ${action} successfully`,
+        severity: 'success'
+      });
+      
+      handleCloseConfirmDialog();
+      // Refresh transactions list
+      await fetchTransactions();
+    } catch (error) {
+      console.error(`Error ${action} transaction:`, error);
+      setSnackbar({
+        open: true,
+        message: `Failed to ${action} transaction`,
+        severity: 'error'
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   const getTypeColor = (type) => {
@@ -238,18 +295,19 @@ const Transactions = () => {
                 <TableCell>Reference</TableCell>
                 <TableCell align="right">Amount</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : filteredTransactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
                     <Typography variant="body1" color="text.secondary">
                       No transactions found
                     </Typography>
@@ -316,15 +374,15 @@ const Transactions = () => {
                     <TableCell align="right">
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
                         {transaction.type === 'credit' || transaction.type === 'loanCredit' ? (
-                          <ArrowUpward sx={{ fontSize: 16, color: '#42956c' }} />
-                        ) : (
                           <ArrowDownward sx={{ fontSize: 16, color: '#f44336' }} />
+                        ) : (
+                          <ArrowUpward sx={{ fontSize: 16, color: '#42956c' }} />
                         )}
                         <Typography 
                           variant="body2" 
                           fontWeight="bold"
                           sx={{ 
-                            color: transaction.type === 'credit' || transaction.type === 'loanCredit' ? '#42956c' : '#f44336'
+                            color: transaction.type === 'credit' || transaction.type === 'loanCredit' ? '#f44336' : '#42956c'
                           }}
                         >
                           {formatCurrency(transaction.amount)}
@@ -337,6 +395,33 @@ const Transactions = () => {
                         size="small"
                         color={getStatusColor(transaction.status)}
                       />
+                    </TableCell>
+                    <TableCell align="center">
+                      {transaction.status === 'completed' && (
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenConfirmDialog(transaction, 'revert')}
+                          sx={{ color: '#f44336' }}
+                          title="Revert Transaction"
+                        >
+                          <Cancel />
+                        </IconButton>
+                      )}
+                      {transaction.status === 'pending' && (
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenConfirmDialog(transaction, 'cancel')}
+                          sx={{ color: '#ff9800' }}
+                          title="Cancel Transaction"
+                        >
+                          <Close />
+                        </IconButton>
+                      )}
+                      {(transaction.status === 'failed' || transaction.status === 'processing') && (
+                        <Typography variant="body2" color="text.secondary">
+                          -
+                        </Typography>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -355,6 +440,78 @@ const Transactions = () => {
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
       </Paper>
+
+      {/* Confirmation Dialog */}
+      <Dialog 
+        open={confirmDialog.open} 
+        onClose={handleCloseConfirmDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {confirmDialog.action === 'revert' ? 'Revert Transaction' : 'Cancel Transaction'}
+            <IconButton onClick={handleCloseConfirmDialog} size="small" disabled={processing}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Are you sure you want to {confirmDialog.action} this transaction?
+          </Typography>
+          {confirmDialog.transaction && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+              <Typography variant="body2">
+                <strong>Transaction ID:</strong> {confirmDialog.transaction.transactionId}
+              </Typography>
+              <Typography variant="body2">
+                <strong>User:</strong> {confirmDialog.transaction.firstName} {confirmDialog.transaction.lastName}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Amount:</strong> {formatCurrency(confirmDialog.transaction.amount)}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Type:</strong> {confirmDialog.transaction.type}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Category:</strong> {confirmDialog.transaction.category}
+              </Typography>
+            </Box>
+          )}
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            {confirmDialog.action === 'revert' 
+              ? 'This action will reverse the transaction and restore the previous state. This cannot be undone.'
+              : 'This action will cancel the pending transaction. This cannot be undone.'
+            }
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseConfirmDialog} disabled={processing}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmAction}
+            variant="contained"
+            disabled={processing}
+            color={confirmDialog.action === 'revert' ? 'error' : 'warning'}
+          >
+            {processing ? <CircularProgress size={20} color="inherit" /> : `${confirmDialog.action === 'revert' ? 'Revert' : 'Cancel'} Transaction`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

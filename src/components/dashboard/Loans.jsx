@@ -17,8 +17,6 @@ import {
   Chip,
   Avatar,
   IconButton,
-  Menu,
-  MenuItem,
   CircularProgress,
   Dialog,
   DialogTitle,
@@ -30,7 +28,6 @@ import {
   AttachMoney,
   TrendingUp,
   Schedule,
-  MoreVert,
   Add,
   CheckCircle,
   Cancel,
@@ -41,7 +38,6 @@ import {
 
 const Loans = () => {
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statistics, setStatistics] = useState({});
   const [loans, setLoans] = useState([]);
@@ -352,15 +348,9 @@ const Loans = () => {
                         </IconButton>
                       </Box>
                     ) : (
-                      <IconButton 
-                        size="small" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setAnchorEl(e.currentTarget);
-                        }}
-                      >
-                        <MoreVert />
-                      </IconButton>
+                      <Typography variant="body2" color="text.secondary">
+                        -
+                      </Typography>
                     )}
                   </TableCell>
                 </TableRow>
@@ -371,12 +361,6 @@ const Loans = () => {
           </Table>
         </TableContainer>
       </Paper>
-
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-        <MenuItem>View Details</MenuItem>
-        <MenuItem>Edit Terms</MenuItem>
-        <MenuItem>Payment History</MenuItem>
-      </Menu>
 
       {/* Confirmation Dialog */}
       <Dialog

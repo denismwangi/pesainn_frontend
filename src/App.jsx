@@ -14,6 +14,7 @@ import LoanRequest from './components/dashboard/LoanRequest';
 import LoanDetails from './components/dashboard/LoanDetails';
 import Transactions from './components/dashboard/Transactions';
 import Settings from './components/dashboard/Settings';
+import LoanTypes from './components/dashboard/LoanTypes';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Create custom theme with your primary color
@@ -125,8 +126,11 @@ function App() {
             <Route path="employees" element={<Employees />} />
             <Route path="payroll" element={<Payroll />} />
             <Route path="loans" element={<Loans />} />
+            <Route path="loans/advanced" element={<Loans />} />
+            <Route path="loans/personal" element={<Loans />} />
             <Route path="transactions" element={<Transactions />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="settings/loan-types" element={<LoanTypes />} />
           </Route>
           
           {/* Loan Request route - Protected */}

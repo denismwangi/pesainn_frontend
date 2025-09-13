@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import userService from '../../services/userService';
+import { API_ENDPOINTS } from '../../config/api';
+import { TokenManager } from '../../utils/storage';
 import {
   Box,
   Paper,
@@ -14,6 +15,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Chip,
   LinearProgress,
   Tab,
@@ -41,7 +43,6 @@ import {
 } from '@mui/icons-material';
 
 const Payroll = () => {
-  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -52,10 +53,22 @@ const Payroll = () => {
   const [newSalary, setNewSalary] = useState('');
   const [updating, setUpdating] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [runPayrollDialog, setRunPayrollDialog] = useState(false);
+  const [runningPayroll, setRunningPayroll] = useState(false);
+  const [payrollHistory, setPayrollHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     fetchEmployeeStatistics();
   }, []);
+
+  useEffect(() => {
+    if (tabValue === 1) { // Only fetch when Payroll History tab is active
+      fetchPayrollHistory();
+    }
+  }, [tabValue]);
 
   const fetchEmployeeStatistics = async () => {
     setLoading(true);
@@ -85,13 +98,6 @@ const Payroll = () => {
     }).format(amount);
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-KE', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
 
   const getNextPayrollDate = () => {
     const today = new Date();
@@ -138,16 +144,39 @@ const Payroll = () => {
     },
   ];
 
-  const payrollHistory = [
-    { id: 1, month: 'November 2024', amount: 125430, employees: 248, status: 'completed', date: '2024-11-25' },
-    { id: 2, month: 'October 2024', amount: 118920, employees: 245, status: 'completed', date: '2024-10-25' },
-    { id: 3, month: 'September 2024', amount: 115200, employees: 242, status: 'completed', date: '2024-09-25' },
-    { id: 4, month: 'August 2024', amount: 112500, employees: 240, status: 'completed', date: '2024-08-25' },
-  ];
+  const fetchPayrollHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const token = TokenManager.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
 
-  const calculateTax = (salary) => {
-    // Simple tax calculation - 20% of salary
-    return salary * 0.2;
+      const response = await fetch(API_ENDPOINTS.PAYROLL_HISTORY, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setPayrollHistory(data.data || []);
+      } else {
+        throw new Error(data.message || 'Failed to fetch payroll history');
+      }
+    } catch (error) {
+      console.error('Error fetching payroll history:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to fetch payroll history',
+        severity: 'error'
+      });
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const upcomingPayroll = employees.map(employee => ({
@@ -155,8 +184,8 @@ const Payroll = () => {
     name: `${employee.firstName} ${employee.lastName}`,
     department: employee.userGroup || 'Employee',
     salary: employee.basicSalary || 0,
-    tax: calculateTax(employee.basicSalary || 0),
-    net: (employee.basicSalary || 0) - calculateTax(employee.basicSalary || 0),
+    tax: 0, // Tax is always 0
+    net: employee.basicSalary || 0, // Net salary equals gross salary since tax is 0
     status: employee.basicSalary > 0 ? 'approved' : 'pending',
     email: employee.email,
     joinedAt: employee.joinedAt
@@ -167,9 +196,21 @@ const Payroll = () => {
     employee.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleEmployeeClick = (employeeId) => {
-    navigate(`/employees/${employeeId}`);
+  // Pagination logic
+  const paginatedEmployees = filteredEmployees.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const handleChangePage = (_, newPage) => {
+    setPage(newPage);
   };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
 
   const handleUpdateSalary = (employee) => {
     setSelectedEmployee(employee);
@@ -223,6 +264,65 @@ const Payroll = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const handleRunPayroll = async () => {
+    setRunningPayroll(true);
+    try {
+      const token = TokenManager.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const currentDate = new Date();
+      const monthYear = currentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toUpperCase();
+      const reference = `SALARY-${monthYear}`;
+
+      const response = await fetch(API_ENDPOINTS.BULK_CREDIT_SALARY, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          description: 'Monthly salary payment',
+          reference: reference,
+          category: 'salary'
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setSnackbar({
+          open: true,
+          message: data.message || 'Payroll processed successfully!',
+          severity: 'success'
+        });
+        setRunPayrollDialog(false);
+        // Refresh employee data to show updated balances
+        await fetchEmployeeStatistics();
+      } else {
+        throw new Error(data.message || 'Failed to run payroll');
+      }
+    } catch (error) {
+      console.error('Error running payroll:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to run payroll. Please try again.',
+        severity: 'error'
+      });
+    } finally {
+      setRunningPayroll(false);
+    }
+  };
+
+  const handleOpenRunPayrollDialog = () => {
+    setRunPayrollDialog(true);
+  };
+
+  const handleCloseRunPayrollDialog = () => {
+    setRunPayrollDialog(false);
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -238,6 +338,7 @@ const Payroll = () => {
           <Button
             variant="contained"
             startIcon={<PlayArrow />}
+            onClick={handleOpenRunPayrollDialog}
             sx={{ backgroundColor: '#42956c', '&:hover': { backgroundColor: '#357a59' } }}
           >
             Run Payroll
@@ -331,7 +432,7 @@ const Payroll = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredEmployees.map((row) => (
+                  paginatedEmployees.map((row) => (
                     <TableRow 
                       key={row.id} 
                       hover
@@ -374,6 +475,16 @@ const Payroll = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            component="div"
+            count={filteredEmployees.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            sx={{ borderTop: 1, borderColor: 'divider' }}
+          />
         </Paper>
       ) : (
         <Paper sx={{ p: 3 }}>
@@ -383,44 +494,46 @@ const Payroll = () => {
                 <TableRow>
                   <TableCell>Period</TableCell>
                   <TableCell>Date Processed</TableCell>
-                  <TableCell align="right">Total Amount</TableCell>
                   <TableCell>Employees</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Progress</TableCell>
+                  <TableCell align="">Total Amount</TableCell>
+                  
+                 
                 </TableRow>
               </TableHead>
               <TableBody>
-                {payrollHistory.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.month}</TableCell>
-                    <TableCell>{row.date}</TableCell>
-                    <TableCell align="right">
-                      <strong>${row.amount.toLocaleString()}</strong>
-                    </TableCell>
-                    <TableCell>{row.employees}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={row.status}
-                        size="small"
-                        color="success"
-                      />
-                    </TableCell>
-                    <TableCell sx={{ width: 200 }}>
-                      <LinearProgress
-                        variant="determinate"
-                        value={100}
-                        sx={{
-                          height: 6,
-                          borderRadius: 3,
-                          backgroundColor: '#e0e0e0',
-                          '& .MuiLinearProgress-bar': {
-                            backgroundColor: '#42956c',
-                          }
-                        }}
-                      />
+                {historyLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center" sx={{ py: 5 }}>
+                      <CircularProgress />
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : payrollHistory.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center" sx={{ py: 5 }}>
+                      <Typography variant="body1" color="text.secondary">
+                        No payroll history found
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  payrollHistory.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{row.monthName}</TableCell>
+                      <TableCell>{row.dateCreated ? new Date(row.dateCreated).toLocaleDateString('en-KE', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      }) : '-'}</TableCell>
+                       <TableCell>{row.totalEmployees || row.totalEmployees}</TableCell>
+
+                      <TableCell>
+                        <strong>{formatCurrency(row.totalAmount || row.amount)}</strong>
+                      </TableCell>
+
+                      
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -467,6 +580,63 @@ const Payroll = () => {
             }}
           >
             {updating ? <CircularProgress size={20} color="inherit" /> : 'Update Salary'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Run Payroll Confirmation Dialog */}
+      <Dialog open={runPayrollDialog} onClose={handleCloseRunPayrollDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            Confirm Payroll Processing
+            <IconButton onClick={handleCloseRunPayrollDialog} size="small" disabled={runningPayroll}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Are you sure you want to process payroll for all employees?
+          </Typography>
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Payroll Summary:
+            </Typography>
+            <Typography variant="body2">
+              <strong>Total Employees:</strong> {statistics.totalEmployees || 0}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Total Amount:</strong> {formatCurrency(statistics.totalBasicSalary || 0)}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Processing Date:</strong> {new Date().toLocaleDateString('en-KE', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Reference:</strong> SALARY-{new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toUpperCase()}
+            </Typography>
+          </Box>
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            This action will credit salaries to all active employees' wallets and cannot be undone.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={handleCloseRunPayrollDialog} color="inherit" disabled={runningPayroll}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleRunPayroll}
+            variant="contained"
+            disabled={runningPayroll}
+            sx={{ 
+              backgroundColor: '#42956c', 
+              '&:hover': { backgroundColor: '#357a59' } 
+            }}
+          >
+            {runningPayroll ? <CircularProgress size={20} color="inherit" /> : 'Process Payroll'}
           </Button>
         </DialogActions>
       </Dialog>

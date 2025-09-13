@@ -21,6 +21,7 @@ export const API_ENDPOINTS = {
   PAYROLL: `${API_URL}/api/payroll`,
   PAYROLL_BY_ID: (id) => `${API_URL}/api/payroll/${id}`,
   RUN_PAYROLL: `${API_URL}/api/payroll/run`,
+  BULK_CREDIT_SALARY: `${API_URL}/api/v1/wallet/admin/bulk-credit-employees-salary`,
   
   // Loan endpoints
   LOANS: `${API_URL}/api/loans`,
@@ -53,6 +54,13 @@ export const API_ENDPOINTS = {
   UPDATE_COMPANY: `${API_URL}/api/settings/company`,
   UPDATE_NOTIFICATIONS: `${API_URL}/api/settings/notifications`,
   UPDATE_PASSWORD: `${API_URL}/api/settings/password`,
+  
+  // Dashboard endpoints
+  DASHBOARD_STATISTICS: `${API_URL}/api/v1/dashboard/statistics`,
+  SALARY_STATISTICS: `${API_URL}/api/v1/dashboard/salary-statistics`,
+  PAYROLL_HISTORY: `${API_URL}/api/v1/dashboard/payroll-history`,
+  REVENUE_STATISTICS: `${API_URL}/api/v1/dashboard/revenue-statistics`,
+  RECENT_TRANSACTIONS: `${API_URL}/api/v1/transactions`,
 };
 
 // API Headers
